@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Correcaminos - Plataforma de Pagos</title>
+    <meta name="description"
+        content="Plataforma para informar el pago de cuotas de Correcaminos. Actividades de atletismo y cuota social.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Firebase SDK (Version Compat para máxima compatibilidad local) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <!-- Traducimos la API modular a algo que los scripts actuales entiendan -->
+    <script>
+        window.firebase = {
+            app: { initializeApp: (config) => firebase.initializeApp(config) },
+            auth: {
+                getAuth: (app) => firebase.auth(),
+                signInWithEmailAndPassword: (auth, email, pass) => auth.signInWithEmailAndPassword(email, pass),
+                signOut: (auth) => auth.signOut(),
+                onAuthStateChanged: (auth, cb) => auth.onAuthStateChanged(cb)
+            },
+            firestore: {
+                getFirestore: (app) => firebase.firestore(),
+                doc: (db, coll, id) => db.collection(coll).doc(id),
+                collection: (db, coll) => db.collection(coll),
+                getDoc: (docRef) => docRef.get(),
+                setDoc: (docRef, data) => docRef.set(data),
+                updateDoc: (docRef, data) => docRef.update(data),
+                query: (collRef, ...constraints) => {
+                    let q = collRef;
+                    // Simplificación para los métodos usados
+                    return q;
+                },
+                where: (field, op, val) => ({ field, op, val }),
+                orderBy: (field, dir) => ({ field, dir }),
+                getDocs: (query) => query.get(),
+                addDoc: (collRef, data) => collRef.add(data),
+                onSnapshot: (query, cb, err) => query.onSnapshot(cb, err)
+            }
+        };
+    </script>
+</head>
+
+<body>
+    <div id="app">
+        <!-- Login View -->
+        <section id="login-view" class="view active">
+            <div class="login-container">
+                <div class="login-card">
+                    <div class="login-header">
+                        <img src="img/Logo Correcaminos.jpeg" alt="Correcaminos Logo" class="login-logo">
+                        <h1>Bienvenido</h1>
+                        <p>Ingresa tus credenciales para continuar</p>
+                    </div>
+                    <form id="login-form">
+                        <div class="form-group">
+                            <label for="username">Usuario</label>
+                            <div class="input-icon">
+                                <i class="fas fa-user"></i>
+                                <input type="text" id="username" placeholder="Tu nombre de usuario" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Contraseña</label>
+                            <div class="input-icon">
+                                <i class="fas fa-lock"></i>
+                                <input type="password" id="password" placeholder="••••••••" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary">Iniciar Sesión</button>
+                    </form>
+                    <div class="login-footer">
+                        <p>Usuario: <b>admin</b> | Pass: <b>admin123</b></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Dashboard View (Parent/User) -->
+        <section id="user-view" class="view">
+            <nav class="navbar">
+                <div class="nav-content">
+                    <div class="nav-brand">
+                        <img src="img/Logo Correcaminos.jpeg" alt="Logo" class="nav-logo">
+                        <span>Correcaminos</span>
+                    </div>
+                    <div class="nav-user">
+                        <span id="user-display-name">Padre de Familia</span>
+                        <button class="btn-logout" id="logout-btn">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </nav>
+
+            <main class="container">
+                <header class="dashboard-header">
+                    <h2>Mi Perfil</h2>
+                    <p>Gestiona los pagos de tu hijo/a</p>
+                </header>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon athletics"><i class="fas fa-running"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Actividad Deportiva</span>
+                            <span class="stat-value" id="fee-athletics">$40.000</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon social"><i class="fas fa-users"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Cuota Social</span>
+                            <span class="stat-value" id="fee-social">$3.000</span>
+                        </div>
+                    </div>
+                    <div class="stat-card highlight">
+                        <div class="stat-icon total"><i class="fas fa-hand-holding-dollar"></i></div>
+                        <div class="stat-info">
+                            <span class="stat-label">Total Mensual</span>
+                            <span class="stat-value" id="fee-total">$43.000</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-content">
+                    <div class="card payment-history">
+                        <div class="card-header">
+                            <h3>Historial de Pagos</h3>
+                            <button class="btn-primary btn-sm" id="btn-report-payment">
+                                <i class="fas fa-plus"></i> Informar Pago
+                            </button>
+                        </div>
+                        <div class="table-responsive">
+                            <table id="payments-table">
+                                <thead>
+                                    <tr>
+                                        <th>Mes</th>
+                                        <th>Fecha</th>
+                                        <th>Monto</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </section>
+
+        <!-- Admin View -->
+        <section id="admin-view" class="view">
+            <nav class="navbar">
+                <div class="nav-content">
+                    <div class="nav-brand">
+                        <img src="img/Logo Correcaminos.jpeg" alt="Logo" class="nav-logo">
+                        <span>Correcaminos Admin</span>
+                    </div>
+                    <div class="nav-menu">
+                        <button class="nav-link active" data-target="admin-reports">Reportes</button>
+                        <button class="nav-link" data-target="admin-users">Usuarios</button>
+                        <button class="nav-link" data-target="admin-config">Configuración</button>
+                    </div>
+                    <div class="nav-user">
+                        <span>Administrador</span>
+                        <button class="btn-logout" id="admin-logout-btn">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </nav>
+
+            <main class="container">
+                <div id="admin-reports" class="admin-tab active">
+                    <header class="dashboard-header">
+                        <div class="header-left">
+                            <h2>Reporte de Cobros</h2>
+                            <p>Resumen mensual de todos los pagos realizados</p>
+                        </div>
+                    </header>
+
+                    <div class="card">
+                        <div class="table-responsive">
+                            <table id="admin-payments-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha</th>
+                                        <th>Usuario</th>
+                                        <th>Mes</th>
+                                        <th>Monto</th>
+                                        <th>Foto</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="admin-users" class="admin-tab">
+                    <header class="dashboard-header">
+                        <div class="header-left">
+                            <h2>Gestión de Usuarios</h2>
+                            <p>Lista de padres y alumnos registrados</p>
+                        </div>
+                        <div class="header-right">
+                            <button class="btn-primary" id="btn-add-user">
+                                <i class="fas fa-user-plus"></i> Nuevo Usuario
+                            </button>
+                        </div>
+                    </header>
+                    <div class="card">
+                        <div class="table-responsive">
+                            <table id="admin-users-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nombre / Alumno</th>
+                                        <th>Email / Usuario</th>
+                                        <th>Rol</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Usuarios se cargarán aquí -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="admin-config" class="admin-tab">
+                    <header class="dashboard-header">
+                        <h2>Configuración</h2>
+                        <p>Actualiza los valores de las cuotas</p>
+                    </header>
+
+                    <div class="config-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Valores de Cuotas</h3>
+                            </div>
+                            <form id="config-fees-form" class="card-body">
+                                <div class="form-group">
+                                    <label for="config-athletics">Actividad Deportiva ($)</label>
+                                    <input type="number" id="config-athletics" value="40000" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="config-social">Cuota Social ($)</label>
+                                    <input type="number" id="config-social" value="3000" required>
+                                </div>
+                                <div class="form-group total-preview">
+                                    <label>Total Actual:</label>
+                                    <span id="config-total-preview">$43.000</span>
+                                </div>
+                                <button type="submit" class="btn-primary">Guardar Cambios</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </section>
+
+        <!-- Modal for Payment Reporting -->
+        <div id="payment-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Informar Pago</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <form id="payment-report-form">
+                    <div class="form-group">
+                        <label for="payment-month">Mes que abona</label>
+                        <select id="payment-month" required>
+                            <option value="">Seleccione un mes</option>
+                            <!-- ... Meses ... -->
+                            <option value="Enero">Enero</option>
+                            <option value="Febrero">Febrero</option>
+                            <option value="Marzo">Marzo</option>
+                            <option value="Abril">Abril</option>
+                            <option value="Mayo">Mayo</option>
+                            <option value="Junio">Junio</option>
+                            <option value="Julio">Julio</option>
+                            <option value="Agosto">Agosto</option>
+                            <option value="Septiembre">Septiembre</option>
+                            <option value="Octubre">Octubre</option>
+                            <option value="Noviembre">Noviembre</option>
+                            <option value="Diciembre">Diciembre</option>
+                        </select>
+                    </div>
+                    <div id="children-assignment" class="form-group">
+                        <!-- Dynamic checkboxes for children will appear here -->
+                    </div>
+                    <div class="form-group">
+                        <label for="payment-amount">Monto Total a Pagar ($)</label>
+                        <input type="number" id="payment-amount" value="0" readonly>
+                        <small id="payment-detail-text">Calculado según cantidad de hijos.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="payment-receipt">Foto del Comprobante</label>
+                        <div class="file-upload" id="file-upload-zone">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p>Toca para seleccionar foto</p>
+                            <input type="file" id="payment-receipt" accept="image/*" hidden>
+                            <span id="file-name"></span>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-text close-modal">Cancelar</button>
+                        <button type="submit" class="btn-primary">Enviar Reporte</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal for New User -->
+        <div id="user-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Registrar Nuevo Usuario</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <form id="new-user-form">
+                    <div class="form-group">
+                        <label for="reg-name">Nombre del Padre / Madre</label>
+                        <input type="text" id="reg-name" placeholder="Ej: Patricio Gomez" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-email">Usuario (sin @)</label>
+                        <input type="text" id="reg-email" placeholder="ej: patricio" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-children">Nombre de los hijos (separados por coma)</label>
+                        <input type="text" id="reg-children" placeholder="Ej: Juan, Maria" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-pass">Contraseña Inicial</label>
+                        <input type="password" id="reg-pass" value="correcaminos123" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="reg-role">Rol</label>
+                        <select id="reg-role">
+                            <option value="user">Padre (Usuario)</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-text close-modal">Cancelar</button>
+                        <button type="submit" class="btn-primary">Crear Usuario</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div id="toast-container"></div>
+    </div>
+
+    <!-- Scripts (Cargados en orden sin módulos) -->
+    <script src="js/firebase-config.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>

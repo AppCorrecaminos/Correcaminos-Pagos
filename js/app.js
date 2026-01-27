@@ -1,5 +1,5 @@
 /**
- * app.js - Lógica Principal (Versión Sincronizada y Corregida)
+ * app.js - Lógica Principal (Versión Completa y Restaurada)
  */
 
 let db = null;
@@ -9,7 +9,7 @@ let currentUser = null;
 function initializeFirebase() {
     try {
         if (!window.firebaseConfig || window.firebaseConfig.apiKey === "TU_API_KEY") {
-            console.warn("Firebase no configurado.");
+            console.warn("Firebase no configurado. Revisa js/firebase-config.js");
             return;
         }
         const app = window.firebase.app.initializeApp(window.firebaseConfig);
@@ -18,7 +18,7 @@ function initializeFirebase() {
         window.DataManager.init(db);
         window.Auth.init(auth, db);
     } catch (e) {
-        console.error("Error Firebase:", e);
+        console.error("Error crítico Firebase:", e);
     }
 }
 
@@ -40,7 +40,8 @@ function initApp() {
 
 function showView(viewId) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById(viewId)?.classList.add('active');
+    const target = document.getElementById(viewId);
+    if (target) target.classList.add('active');
 }
 
 function toast(message, type = 'success') {
@@ -69,7 +70,7 @@ function parseChildren(childrenStr) {
 async function updateUI() {
     if (!currentUser) return;
     const config = await window.DataManager.getConfig();
-    const activities = config.activities || [];
+    const activities = config.activities || [{ name: 'Atletismo', price: 40000 }];
 
     if (currentUser.role === 'admin') {
         renderAdminDashboard();
@@ -80,7 +81,13 @@ async function updateUI() {
         window.DataManager.subscribeToPayments((payments) => renderAdminDashboard(payments));
     } else {
         renderUserDashboard();
+        const nameDisp = document.getElementById('user-display-name');
+        if (nameDisp) nameDisp.innerText = currentUser.name;
+
         const children = parseChildren(currentUser.children);
+        const breakdownContainer = document.getElementById('breakdown-container');
+        const paymentChildrenAssignment = document.getElementById('children-assignment');
+
         let totalActivitiesCost = 0;
         let tableRowsHtml = '';
 
@@ -92,12 +99,11 @@ async function updateUI() {
             tableRowsHtml += `<tr><td><b>${kid.name}</b> <span class="cost-tag">${kid.category}</span></td><td align="right">$ ${price.toLocaleString('es-AR')}</td></tr>`;
         });
 
-        const socialFee = config.socialFee || 3000;
+        const socialFee = config.socialFee || 0;
         const finalTotal = totalActivitiesCost + socialFee;
 
-        const breakdown = document.getElementById('breakdown-container');
-        if (breakdown) {
-            breakdown.innerHTML = `
+        if (breakdownContainer) {
+            breakdownContainer.innerHTML = `
                 <div class="card" style="margin-top: 2rem;">
                     <div class="card-header"><h3>Desglose Detallado por Hijo</h3></div>
                     <div class="card-body">
@@ -108,9 +114,8 @@ async function updateUI() {
                 </div>`;
         }
 
-        const assignment = document.getElementById('children-assignment');
-        if (assignment) {
-            assignment.innerHTML = `<label>Resumen de Cobro:</label>
+        if (paymentChildrenAssignment) {
+            paymentChildrenAssignment.innerHTML = `<label>Resumen de Cobro:</label>
                 <table class="children-fees">${tableRowsHtml}
                     <tr style="border-top: 1px solid #eee"><td>Cuota Social</td><td align="right">$ ${socialFee.toLocaleString('es-AR')}</td></tr>
                 </table>`;
@@ -121,79 +126,7 @@ async function updateUI() {
         document.getElementById('fee-social').innerText = `$ ${socialFee.toLocaleString('es-AR')}`;
         const amountInput = document.getElementById('payment-amount');
         if (amountInput) amountInput.value = finalTotal;
-        document.getElementById('user-display-name').innerText = currentUser.name;
     }
-}
-
-async function renderUserDashboard() {
-    const payments = await window.DataManager.getPaymentsByUser(currentUser.id);
-    const tbody = document.querySelector('#payments-table tbody');
-    if (!tbody) return; tbody.innerHTML = '';
-    const statusMap = { 'pending': 'Pendiente', 'approved': 'Aprobado', 'rejected': 'Rechazado' };
-    payments.forEach(p => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${p.month}</td><td>${p.date}</td><td>$ ${p.amount.toLocaleString('es-AR')}</td><td><span class="badge badge-${p.status}">${statusMap[p.status] || p.status}</span></td><td>${p.receiptURL ? `<button class="btn-text btn-view-photo" data-id="${p.id}">Ver</button>` : '---'}</td>`;
-        tbody.appendChild(tr);
-    });
-    tbody.querySelectorAll('.btn-view-photo').forEach(btn => btn.addEventListener('click', () => {
-        const p = payments.find(pay => pay.id === btn.dataset.id);
-        if (p && p.receiptURL) openImageModal(p.receiptURL);
-    }));
-}
-
-function openImageModal(url) {
-    const win = window.open("");
-    win.document.write(`<body style="margin:0;display:flex;justify-content:center;background:#000;"><img src="${url}" style="max-height:100vh;"></body>`);
-}
-
-function renderActivitiesConfig(activities) {
-    const tbody = document.querySelector('#activities-config-table tbody');
-    if (!tbody) return; tbody.innerHTML = '';
-    activities.forEach((act, index) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="text" value="${act.name}" class="act-name"></td><td><input type="number" value="${act.price}" class="act-price"></td><td><button class="btn-text btn-del-act" data-index="${index}"><i class="fas fa-trash"></i></button></td>`;
-        tbody.appendChild(tr);
-    });
-    tbody.querySelectorAll('.btn-del-act').forEach(btn => btn.addEventListener('click', () => {
-        activities.splice(parseInt(btn.dataset.index), 1);
-        renderActivitiesConfig(activities);
-    }));
-}
-
-async function renderAdminDashboard(manualPayments = null) {
-    const payments = manualPayments || await window.DataManager.getPayments();
-    const tbody = document.querySelector('#admin-payments-table tbody');
-    if (!tbody) return; tbody.innerHTML = '';
-    const statusMap = { 'pending': 'Pendiente', 'approved': 'Aprobado', 'rejected': 'Rechazado' };
-    const fStatus = document.getElementById('filter-status').value;
-    const fMonth = document.getElementById('filter-month').value;
-    let total = 0, pending = 0;
-
-    payments.forEach(p => {
-        if (fStatus !== 'all' && p.status !== fStatus) return;
-        if (fMonth !== 'all' && p.month !== fMonth) return;
-        if (p.status === 'approved') total += (p.amount || 0);
-        if (p.status === 'pending') pending++;
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${p.date}</td><td><b>${p.userName}</b><br><small>${p.childrenNames || ''}</small></td><td>${p.month}</td><td>$ ${p.amount.toLocaleString('es-AR')}</td><td>${p.receiptURL ? `<a href="#" class="btn-view-admin-photo" data-id="${p.id}"><i class="fas fa-image"></i> Ver</a>` : '---'}</td><td><span class="badge badge-${p.status}">${statusMap[p.status]}</span></td><td>${p.status === 'pending' ? `<button class="btn-action approve" data-id="${p.id}"><i class="fas fa-check"></i></button><button class="btn-action reject" data-id="${p.id}"><i class="fas fa-times"></i></button>` : 'Listo'}</td>`;
-        tbody.appendChild(tr);
-    });
-    document.getElementById('stat-pending').innerText = pending;
-    document.getElementById('stat-total').innerText = `$ ${total.toLocaleString('es-AR')}`;
-
-    tbody.querySelectorAll('.approve').forEach(btn => btn.addEventListener('click', async () => {
-        await window.DataManager.updatePaymentStatus(btn.dataset.id, 'approved');
-        toast('Aprobado'); renderAdminDashboard();
-    }));
-    tbody.querySelectorAll('.reject').forEach(btn => btn.addEventListener('click', async () => {
-        await window.DataManager.updatePaymentStatus(btn.dataset.id, 'rejected');
-        toast('Rechazado', 'error'); renderAdminDashboard();
-    }));
-    tbody.querySelectorAll('.btn-view-admin-photo').forEach(btn => btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const p = payments.find(pay => pay.id === btn.dataset.id);
-        if (p && p.receiptURL) openImageModal(p.receiptURL);
-    }));
 }
 
 async function renderAdminUsers() {
@@ -225,15 +158,36 @@ function openEditUserModal(user) {
 }
 
 function setupEventListeners() {
+    // Login
     document.getElementById('login-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = e.target.querySelector('button');
         btn.disabled = true;
+        btn.innerText = "Verificando...";
         const res = await window.Auth.login(document.getElementById('username').value, document.getElementById('password').value);
-        if (res.success) { currentUser = res.user; showView(currentUser.role === 'admin' ? 'admin-view' : 'user-view'); updateUI(); toast('¡Hola!'); }
-        else { alert(res.message); btn.disabled = false; }
+        if (res.success) {
+            currentUser = res.user;
+            showView(currentUser.role === 'admin' ? 'admin-view' : 'user-view');
+            updateUI();
+            toast('¡Hola ' + currentUser.name + '!');
+        } else {
+            alert(res.message);
+            btn.disabled = false;
+            btn.innerText = "Iniciar Sesión";
+        }
     });
 
+    // Navegación Admin
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', () => {
+            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(link.dataset.target).classList.add('active');
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+        });
+    });
+
+    // Actividades
     document.getElementById('btn-add-activity-row')?.addEventListener('click', () => {
         const tbody = document.querySelector('#activities-config-table tbody');
         const tr = document.createElement('tr');
@@ -256,21 +210,7 @@ function setupEventListeners() {
         toast('Actividades guardadas'); updateUI();
     });
 
-    document.getElementById('config-fees-form')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const config = await window.DataManager.getConfig();
-        config.socialFee = parseInt(document.getElementById('config-social').value);
-        await window.DataManager.updateConfig(config);
-        toast('Cuota social guardada'); updateUI();
-    });
-
-    document.getElementById('btn-sync-to-cloud')?.addEventListener('click', async () => {
-        const users = await window.DataManager.getUsers();
-        toast('Sincronizando ' + users.length + ' usuarios...');
-        for (let u of users) { await window.DataManager.saveUser(u.id || u.username, u); }
-        toast('¡Sincronización completa!');
-    });
-
+    // Usuarios: Crear y Editar
     document.getElementById('new-user-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const username = document.getElementById('reg-email').value.toLowerCase().trim();
@@ -299,6 +239,36 @@ function setupEventListeners() {
         toast('Actualizado'); renderAdminUsers();
     });
 
+    document.getElementById('btn-add-user')?.addEventListener('click', () => {
+        document.getElementById('user-modal').classList.add('active');
+    });
+
+    // Configuración y Sincronización
+    document.getElementById('config-fees-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const config = await window.DataManager.getConfig();
+        config.socialFee = parseInt(document.getElementById('config-social').value);
+        await window.DataManager.updateConfig(config);
+        toast('Cuota social guardada'); updateUI();
+    });
+
+    document.getElementById('btn-sync-to-cloud')?.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const btn = e.target;
+        btn.disabled = true;
+        btn.innerText = "Sincronizando...";
+        const users = await window.DataManager.getUsers();
+        if (users.length === 0) {
+            alert("No hay usuarios locales.");
+        } else {
+            for (let u of users) { await window.DataManager.saveUser(u.id || u.username, u); }
+            alert("¡Éxito! Usuarios subidos a la Nube.");
+        }
+        btn.disabled = false;
+        btn.innerText = "📤 Subir Usuarios Locales a la Nube";
+    });
+
+    // Pagos
     document.getElementById('payment-report-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = e.target.querySelector('button[type="submit"]');
@@ -315,28 +285,97 @@ function setupEventListeners() {
                 status: 'pending', receiptURL: receipt
             });
             document.getElementById('payment-modal').classList.remove('active');
-            toast('Pago informado'); updateUI();
+            updateUI();
+            toast('Pago informado');
         } catch (e) { toast('Error', 'error'); } finally { btn.disabled = false; }
     });
 
-    document.querySelectorAll('.btn-logout').forEach(b => b.addEventListener('click', () => window.Auth.logout()));
+    document.getElementById('btn-report-payment')?.addEventListener('click', () => {
+        document.getElementById('payment-modal').classList.add('active');
+    });
+
+    // Filtros Reportes
+    document.getElementById('filter-status')?.addEventListener('change', () => renderAdminDashboard());
+    document.getElementById('filter-month')?.addEventListener('change', () => renderAdminDashboard());
+
+    // Modales y Logout
     document.querySelectorAll('.close-modal').forEach(b => b.addEventListener('click', () => {
         document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     }));
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.addEventListener('click', () => {
-            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-            document.getElementById(link.dataset.target).classList.add('active');
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-        });
-    });
-    document.getElementById('btn-report-payment')?.addEventListener('click', () => document.getElementById('payment-modal').classList.add('active'));
-    document.getElementById('btn-add-user')?.addEventListener('click', () => document.getElementById('user-modal').classList.add('active'));
-    document.getElementById('filter-status')?.addEventListener('change', () => renderAdminDashboard());
-    document.getElementById('filter-month')?.addEventListener('change', () => renderAdminDashboard());
+    document.querySelectorAll('.btn-logout').forEach(b => b.addEventListener('click', () => window.Auth.logout()));
+
+    // Foto recibo
     document.getElementById('file-upload-zone')?.addEventListener('click', () => document.getElementById('payment-receipt').click());
     document.getElementById('payment-receipt')?.addEventListener('change', (e) => {
         if (e.target.files[0]) document.getElementById('file-name').innerText = e.target.files[0].name;
     });
+}
+
+function renderActivitiesConfig(activities) {
+    const tbody = document.querySelector('#activities-config-table tbody');
+    if (!tbody) return; tbody.innerHTML = '';
+    activities.forEach((act, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><input type="text" value="${act.name}" class="act-name"></td><td><input type="number" value="${act.price}" class="act-price"></td><td><button class="btn-text btn-del-act" data-index="${index}"><i class="fas fa-trash"></i></button></td>`;
+        tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('.btn-del-act').forEach(btn => btn.addEventListener('click', () => {
+        activities.splice(parseInt(btn.dataset.index), 1);
+        renderActivitiesConfig(activities);
+    }));
+}
+
+async function renderAdminDashboard(manualPayments = null) {
+    const payments = manualPayments || await window.DataManager.getPayments();
+    const tbody = document.querySelector('#admin-payments-table tbody');
+    if (!tbody) return; tbody.innerHTML = '';
+    const statusMap = { 'pending': 'Pendiente', 'approved': 'Aprobado', 'rejected': 'Rechazado' };
+    const fStatus = document.getElementById('filter-status').value;
+    const fMonth = document.getElementById('filter-month').value;
+    let total = 0; let pending = 0;
+
+    payments.forEach(p => {
+        if (fStatus !== 'all' && p.status !== fStatus) return;
+        if (fMonth !== 'all' && p.month !== fMonth) return;
+        if (p.status === 'approved') total += (p.amount || 0);
+        if (p.status === 'pending') pending++;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${p.date}</td><td><b>${p.userName}</b><br><small>${p.childrenNames || ''}</small></td><td>${p.month}</td><td>$ ${p.amount.toLocaleString('es-AR')}</td><td><span class="badge badge-${p.status}">${statusMap[p.status]}</span></td><td>
+            ${p.receiptURL ? `<button class="btn-text btn-view-admin-photo" data-id="${p.id}">Ver Foto</button>` : '---'}
+            ${p.status === 'pending' ? `<button class="btn-action approve" data-id="${p.id}"><i class="fas fa-check"></i></button>` : ''}
+        </td>`;
+        tbody.appendChild(tr);
+    });
+    document.getElementById('stat-pending').innerText = pending;
+    document.getElementById('stat-total').innerText = `$ ${total.toLocaleString('es-AR')}`;
+
+    tbody.querySelectorAll('.approve').forEach(btn => btn.addEventListener('click', async () => {
+        await window.DataManager.updatePaymentStatus(btn.dataset.id, 'approved');
+        toast('Aprobado'); renderAdminDashboard();
+    }));
+    tbody.querySelectorAll('.btn-view-admin-photo').forEach(btn => btn.addEventListener('click', () => {
+        const p = payments.find(pay => pay.id === btn.dataset.id);
+        if (p && p.receiptURL) openImageModal(p.receiptURL);
+    }));
+}
+
+async function renderUserDashboard() {
+    const payments = await window.DataManager.getPaymentsByUser(currentUser.id);
+    const tbody = document.querySelector('#payments-table tbody');
+    if (!tbody) return; tbody.innerHTML = '';
+    const statusMap = { 'pending': 'Pendiente', 'approved': 'Aprobado', 'rejected': 'Rechazado' };
+    payments.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${p.month}</td><td>${p.date}</td><td>$ ${p.amount.toLocaleString('es-AR')}</td><td><span class="badge badge-${p.status}">${statusMap[p.status] || p.status}</span></td><td>${p.receiptURL ? `<button class="btn-text btn-view-photo" data-id="${p.id}">Ver</button>` : '---'}</td>`;
+        tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll('.btn-view-photo').forEach(btn => btn.addEventListener('click', () => {
+        const p = payments.find(pay => pay.id === btn.dataset.id);
+        if (p && p.receiptURL) openImageModal(p.receiptURL);
+    }));
+}
+
+function openImageModal(url) {
+    const win = window.open("");
+    win.document.write(`<body style="margin:0;display:flex;justify-content:center;background:#000;"><img src="${url}" style="max-height:100vh;"></body>`);
 }

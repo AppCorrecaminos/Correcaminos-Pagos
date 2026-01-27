@@ -1,5 +1,5 @@
 /**
- * auth.js - Sistema de Acceso Global Cloud
+ * auth.js - Sistema de Acceso Global Cloud (Diagnóstico Activo)
  */
 
 const Auth = {
@@ -9,6 +9,7 @@ const Auth = {
     init(authInstance, dbInstance) {
         this.auth = authInstance;
         this.db = dbInstance;
+        console.log("Auth: Conectado a Firebase");
     },
 
     async login(userInput, password) {
@@ -17,7 +18,7 @@ const Auth = {
         const usernameInput = userInput.toLowerCase().trim();
         const slugId = usernameInput.replace(/[^a-z0-9]/g, '_');
 
-        // 1. Usuarios estáticos
+        // 1. Usuarios estáticos (Siempre funcionan)
         if (usernameInput === 'admin' && password === 'admin123') {
             const admin = { id: 'local_admin', username: 'admin', role: 'admin', name: 'Administrador' };
             localStorage.setItem('correcaminos_session', JSON.stringify(admin));
@@ -27,7 +28,6 @@ const Auth = {
         // 2. Intentar buscar en Nube (Prioridad)
         if (this.db) {
             try {
-                // Probar con el slug (id estándar)
                 const docRef = window.firebase.firestore.doc(this.db, "users", slugId);
                 const docSnap = await window.firebase.firestore.getDoc(docRef);
 
@@ -37,12 +37,17 @@ const Auth = {
                         const session = { id: slugId, ...data };
                         localStorage.setItem('correcaminos_session', JSON.stringify(session));
                         return { success: true, user: session };
+                    } else {
+                        return { success: false, message: "Contraseña incorrecta en la nube." };
                     }
                 }
-            } catch (e) { console.error("Error login nube:", e); }
+            } catch (e) {
+                console.error("Error al leer de la nube:", e);
+                return { success: false, message: "Error de conexión con la nube. ¿Configuraste las reglas?" };
+            }
         }
 
-        // 3. Fallback Local (Solo si no hay red o no se encontró en nube)
+        // 3. Fallback Local
         const localUsers = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
         const user = localUsers.find(u => (u.username === usernameInput || u.id === slugId) && u.password === password);
 
@@ -51,7 +56,7 @@ const Auth = {
             return { success: true, user: user };
         }
 
-        return { success: false, message: "Usuario o contraseña incorrectos." };
+        return { success: false, message: "Usuario no encontrado. Asegúrate de haberlo sincronizado a la nube." };
     },
 
     logout() {

@@ -1,75 +1,54 @@
 /**
- * auth.js - Sistema de Acceso Robusto y Compatible
+ * auth.js - Sistema de Acceso Global Cloud
  */
 
 const Auth = {
     auth: null,
     db: null,
 
-    localUsers: [
-        { id: 'local_admin', username: 'admin', password: 'admin123', role: 'admin', name: 'Administrador' },
-        { id: 'local_padre', username: 'padre', password: '123', role: 'user', name: 'Padre de Familia' }
-    ],
-
     init(authInstance, dbInstance) {
         this.auth = authInstance;
         this.db = dbInstance;
-        console.log("Auth initialized.");
-    },
-
-    // Generador de ID consistente
-    getUserId(input) {
-        if (!input) return "";
-        const email = input.includes('@') ? input : `${input}@correcaminos.com`;
-        return email.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
     },
 
     async login(userInput, password) {
         if (!userInput || !password) return { success: false, message: "Ingresa usuario y contraseña." };
 
-        const usernameInput = userInput.toLowerCase().split('@')[0];
+        const usernameInput = userInput.toLowerCase().trim();
+        const slugId = usernameInput.replace(/[^a-z0-9]/g, '_');
 
-        // 1. Intentar con usuarios fijos (admin/padre)
-        const hardcoded = this.localUsers.find(u => u.username.toLowerCase() === usernameInput && u.password === password);
-        if (hardcoded) {
-            localStorage.setItem('correcaminos_session', JSON.stringify(hardcoded));
-            return { success: true, user: hardcoded };
+        // 1. Usuarios estáticos
+        if (usernameInput === 'admin' && password === 'admin123') {
+            const admin = { id: 'local_admin', username: 'admin', role: 'admin', name: 'Administrador' };
+            localStorage.setItem('correcaminos_session', JSON.stringify(admin));
+            return { success: true, user: admin };
         }
 
-        // 2. Intentar buscar en LocalStorage
-        const savedLocalUsers = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
-        const localSaved = savedLocalUsers.find(u => {
-            const storedUser = (u.username || u.email || '').toLowerCase();
-            return (storedUser === userInput.toLowerCase() || storedUser.split('@')[0] === usernameInput) && u.password === password;
-        });
-
-        if (localSaved) {
-            localStorage.setItem('correcaminos_session', JSON.stringify(localSaved));
-            return { success: true, user: localSaved };
-        }
-
-        // 3. Intentar con Firestore (Nube)
+        // 2. Intentar buscar en Nube (Prioridad)
         if (this.db) {
             try {
-                // Probar con ID directo y con ID formateado
-                const idsToTry = [
-                    userInput.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_'),
-                    this.getUserId(userInput)
-                ];
+                // Probar con el slug (id estándar)
+                const docRef = window.firebase.firestore.doc(this.db, "users", slugId);
+                const docSnap = await window.firebase.firestore.getDoc(docRef);
 
-                for (let uid of idsToTry) {
-                    const userDocRef = window.firebase.firestore.doc(this.db, "users", uid);
-                    const userDoc = await window.firebase.firestore.getDoc(userDocRef);
-                    if (userDoc.exists()) {
-                        const data = userDoc.data();
-                        if (data.password === password) {
-                            const sessionData = { id: uid, ...data };
-                            localStorage.setItem('correcaminos_session', JSON.stringify(sessionData));
-                            return { success: true, user: sessionData };
-                        }
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    if (data.password === password) {
+                        const session = { id: slugId, ...data };
+                        localStorage.setItem('correcaminos_session', JSON.stringify(session));
+                        return { success: true, user: session };
                     }
                 }
             } catch (e) { console.error("Error login nube:", e); }
+        }
+
+        // 3. Fallback Local (Solo si no hay red o no se encontró en nube)
+        const localUsers = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
+        const user = localUsers.find(u => (u.username === usernameInput || u.id === slugId) && u.password === password);
+
+        if (user) {
+            localStorage.setItem('correcaminos_session', JSON.stringify(user));
+            return { success: true, user: user };
         }
 
         return { success: false, message: "Usuario o contraseña incorrectos." };
@@ -77,7 +56,6 @@ const Auth = {
 
     logout() {
         localStorage.removeItem('correcaminos_session');
-        if (this.auth) window.firebase.auth.signOut(this.auth).catch(() => { });
         window.location.reload();
     },
 

@@ -1,5 +1,5 @@
 /**
- * app.js - Lógica Principal (Versión Final Robustecida)
+ * app.js - Lógica Principal (Versión Sincronizada y Corregida)
  */
 
 let db = null;
@@ -9,7 +9,7 @@ let currentUser = null;
 function initializeFirebase() {
     try {
         if (!window.firebaseConfig || window.firebaseConfig.apiKey === "TU_API_KEY") {
-            console.warn("Firebase no configurado. Usando modo offline.");
+            console.warn("Firebase no configurado.");
             return;
         }
         const app = window.firebase.app.initializeApp(window.firebaseConfig);
@@ -17,9 +17,8 @@ function initializeFirebase() {
         auth = window.firebase.auth.getAuth(app);
         window.DataManager.init(db);
         window.Auth.init(auth, db);
-        console.log("Sistema listo.");
     } catch (e) {
-        console.error("Error inicialización:", e);
+        console.error("Error Firebase:", e);
     }
 }
 
@@ -70,41 +69,37 @@ function parseChildren(childrenStr) {
 async function updateUI() {
     if (!currentUser) return;
     const config = await window.DataManager.getConfig();
-    const activities = config.activities || [{ name: 'Atletismo', price: 40000 }];
+    const activities = config.activities || [];
 
     if (currentUser.role === 'admin') {
         renderAdminDashboard();
         renderAdminUsers();
         renderActivitiesConfig(activities);
-        const socInput = document.getElementById('config-social');
-        if (socInput) socInput.value = config.socialFee || 3000;
+        const socIn = document.getElementById('config-social');
+        if (socIn) socIn.value = config.socialFee || 3000;
         window.DataManager.subscribeToPayments((payments) => renderAdminDashboard(payments));
     } else {
         renderUserDashboard();
-        const nameDisp = document.getElementById('user-display-name');
-        if (nameDisp) nameDisp.innerText = currentUser.name;
-
         const children = parseChildren(currentUser.children);
-        const breakdownContainer = document.getElementById('breakdown-container');
-        const paymentChildrenAssignment = document.getElementById('children-assignment');
-
         let totalActivitiesCost = 0;
         let tableRowsHtml = '';
 
         children.forEach(kid => {
-            const activity = activities.find(a => a.name.toLowerCase() === kid.category.toLowerCase());
-            const price = activity ? activity.price : 0;
+            const cleanCategory = kid.category.trim().toLowerCase();
+            const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
+            const price = activity ? activity.price : (activities[0]?.price || 40000);
             totalActivitiesCost += price;
             tableRowsHtml += `<tr><td><b>${kid.name}</b> <span class="cost-tag">${kid.category}</span></td><td align="right">$ ${price.toLocaleString('es-AR')}</td></tr>`;
         });
 
-        const socialFee = config.socialFee || 0;
+        const socialFee = config.socialFee || 3000;
         const finalTotal = totalActivitiesCost + socialFee;
 
-        if (breakdownContainer) {
-            breakdownContainer.innerHTML = `
-                <div class="card">
-                    <div class="card-header"><h3>Desglose de Pago Mensual</h3></div>
+        const breakdown = document.getElementById('breakdown-container');
+        if (breakdown) {
+            breakdown.innerHTML = `
+                <div class="card" style="margin-top: 2rem;">
+                    <div class="card-header"><h3>Desglose Detallado por Hijo</h3></div>
                     <div class="card-body">
                         <table class="children-fees">${tableRowsHtml}
                             <tr style="border-top: 2px solid #ddd"><td><b>Cuota Social Familiar</b></td><td align="right">$ ${socialFee.toLocaleString('es-AR')}</td></tr>
@@ -113,8 +108,9 @@ async function updateUI() {
                 </div>`;
         }
 
-        if (paymentChildrenAssignment) {
-            paymentChildrenAssignment.innerHTML = `<label>Resumen del importe:</label>
+        const assignment = document.getElementById('children-assignment');
+        if (assignment) {
+            assignment.innerHTML = `<label>Resumen de Cobro:</label>
                 <table class="children-fees">${tableRowsHtml}
                     <tr style="border-top: 1px solid #eee"><td>Cuota Social</td><td align="right">$ ${socialFee.toLocaleString('es-AR')}</td></tr>
                 </table>`;
@@ -125,18 +121,18 @@ async function updateUI() {
         document.getElementById('fee-social').innerText = `$ ${socialFee.toLocaleString('es-AR')}`;
         const amountInput = document.getElementById('payment-amount');
         if (amountInput) amountInput.value = finalTotal;
+        document.getElementById('user-display-name').innerText = currentUser.name;
     }
 }
 
 async function renderUserDashboard() {
     const payments = await window.DataManager.getPaymentsByUser(currentUser.id);
     const tbody = document.querySelector('#payments-table tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
+    if (!tbody) return; tbody.innerHTML = '';
     const statusMap = { 'pending': 'Pendiente', 'approved': 'Aprobado', 'rejected': 'Rechazado' };
     payments.forEach(p => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${p.month}</td><td>${p.date}</td><td>$ ${p.amount.toLocaleString('es-AR')}</td><td><span class="badge badge-${p.status}">${statusMap[p.status] || p.status}</span></td><td>${p.receiptURL ? `<button class="btn-text btn-view-photo" data-id="${p.id}">Ver Foto</button>` : '---'}</td>`;
+        tr.innerHTML = `<td>${p.month}</td><td>${p.date}</td><td>$ ${p.amount.toLocaleString('es-AR')}</td><td><span class="badge badge-${p.status}">${statusMap[p.status] || p.status}</span></td><td>${p.receiptURL ? `<button class="btn-text btn-view-photo" data-id="${p.id}">Ver</button>` : '---'}</td>`;
         tbody.appendChild(tr);
     });
     tbody.querySelectorAll('.btn-view-photo').forEach(btn => btn.addEventListener('click', () => {
@@ -152,8 +148,7 @@ function openImageModal(url) {
 
 function renderActivitiesConfig(activities) {
     const tbody = document.querySelector('#activities-config-table tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
+    if (!tbody) return; tbody.innerHTML = '';
     activities.forEach((act, index) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `<td><input type="text" value="${act.name}" class="act-name"></td><td><input type="number" value="${act.price}" class="act-price"></td><td><button class="btn-text btn-del-act" data-index="${index}"><i class="fas fa-trash"></i></button></td>`;
@@ -168,8 +163,7 @@ function renderActivitiesConfig(activities) {
 async function renderAdminDashboard(manualPayments = null) {
     const payments = manualPayments || await window.DataManager.getPayments();
     const tbody = document.querySelector('#admin-payments-table tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
+    if (!tbody) return; tbody.innerHTML = '';
     const statusMap = { 'pending': 'Pendiente', 'approved': 'Aprobado', 'rejected': 'Rechazado' };
     const fStatus = document.getElementById('filter-status').value;
     const fMonth = document.getElementById('filter-month').value;
@@ -205,8 +199,7 @@ async function renderAdminDashboard(manualPayments = null) {
 async function renderAdminUsers() {
     const users = await window.DataManager.getUsers();
     const tbody = document.querySelector('#admin-users-table tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
+    if (!tbody) return; tbody.innerHTML = '';
     users.forEach(u => {
         const id = u.id || u.username;
         const tr = document.createElement('tr');
@@ -218,10 +211,7 @@ async function renderAdminUsers() {
         if (user) openEditUserModal(user);
     }));
     tbody.querySelectorAll('.btn-del-user').forEach(btn => btn.addEventListener('click', async () => {
-        if (confirm('¿Eliminar usuario?')) {
-            await window.DataManager.deleteUser(btn.dataset.id);
-            toast('Usuario eliminado'); renderAdminUsers();
-        }
+        if (confirm('¿Eliminar usuario?')) { await window.DataManager.deleteUser(btn.dataset.id); toast('Eliminado'); renderAdminUsers(); }
     }));
 }
 
@@ -240,30 +230,30 @@ function setupEventListeners() {
         const btn = e.target.querySelector('button');
         btn.disabled = true;
         const res = await window.Auth.login(document.getElementById('username').value, document.getElementById('password').value);
-        if (res.success) { currentUser = res.user; showView(currentUser.role === 'admin' ? 'admin-view' : 'user-view'); updateUI(); toast('¡Bienvenido!'); }
+        if (res.success) { currentUser = res.user; showView(currentUser.role === 'admin' ? 'admin-view' : 'user-view'); updateUI(); toast('¡Hola!'); }
         else { alert(res.message); btn.disabled = false; }
     });
 
     document.getElementById('btn-add-activity-row')?.addEventListener('click', () => {
         const tbody = document.querySelector('#activities-config-table tbody');
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="text" placeholder="Nombre" class="act-name"></td><td><input type="number" placeholder="0" class="act-price"></td><td><button class="btn-text btn-del-new"><i class="fas fa-trash"></i></button></td>`;
+        tr.innerHTML = `<td><input type="text" placeholder="Actividad" class="act-name"></td><td><input type="number" placeholder="Costo" class="act-price"></td><td><button class="btn-text btn-del-new"><i class="fas fa-trash"></i></button></td>`;
         tbody.appendChild(tr);
         tr.querySelector('.btn-del-new').addEventListener('click', () => tr.remove());
     });
 
     document.getElementById('btn-save-activities')?.addEventListener('click', async () => {
-        const r = document.querySelectorAll('#activities-config-table tbody tr');
+        const rows = document.querySelectorAll('#activities-config-table tbody tr');
         const activities = [];
-        r.forEach(row => {
-            const n = row.querySelector('.act-name').value;
-            const p = parseInt(row.querySelector('.act-price').value) || 0;
-            if (n) activities.push({ name: n, price: p });
+        rows.forEach(r => {
+            const n = r.querySelector('.act-name').value;
+            const p = parseInt(r.querySelector('.act-price').value) || 0;
+            if (n) activities.push({ name: n.trim(), price: p });
         });
         const c = await window.DataManager.getConfig();
         c.activities = activities;
         await window.DataManager.updateConfig(c);
-        toast('Guardado'); updateUI();
+        toast('Actividades guardadas'); updateUI();
     });
 
     document.getElementById('config-fees-form')?.addEventListener('submit', async (e) => {
@@ -274,8 +264,7 @@ function setupEventListeners() {
         toast('Cuota social guardada'); updateUI();
     });
 
-    document.getElementById('btn-sync-to-cloud')?.addEventListener('click', async (e) => {
-        e.preventDefault();
+    document.getElementById('btn-sync-to-cloud')?.addEventListener('click', async () => {
         const users = await window.DataManager.getUsers();
         toast('Sincronizando ' + users.length + ' usuarios...');
         for (let u of users) { await window.DataManager.saveUser(u.id || u.username, u); }
@@ -284,8 +273,8 @@ function setupEventListeners() {
 
     document.getElementById('new-user-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const username = document.getElementById('reg-email').value.toLowerCase();
-        const userId = username.replace(/[^a-zA-Z0-9]/g, '_');
+        const username = document.getElementById('reg-email').value.toLowerCase().trim();
+        const userId = username.replace(/[^a-z0-9]/g, '_');
         await window.DataManager.saveUser(userId, {
             name: document.getElementById('reg-name').value,
             username: username,
@@ -294,8 +283,7 @@ function setupEventListeners() {
             role: document.getElementById('reg-role').value
         });
         document.getElementById('user-modal').classList.remove('active');
-        toast('Usuario creado'); renderAdminUsers();
-        e.target.reset();
+        toast('Usuario creado'); renderAdminUsers(); e.target.reset();
     });
 
     document.getElementById('edit-user-form')?.addEventListener('submit', async (e) => {
@@ -321,7 +309,7 @@ function setupEventListeners() {
             await window.DataManager.addPayment({
                 userId: currentUser.id,
                 userName: currentUser.name,
-                childrenNames: currentUser.children || 'Hijo/a',
+                childrenNames: currentUser.children || 'Hijos',
                 month: document.getElementById('payment-month').value,
                 amount: parseInt(document.getElementById('payment-amount').value),
                 status: 'pending', receiptURL: receipt
@@ -347,7 +335,6 @@ function setupEventListeners() {
     document.getElementById('btn-add-user')?.addEventListener('click', () => document.getElementById('user-modal').classList.add('active'));
     document.getElementById('filter-status')?.addEventListener('change', () => renderAdminDashboard());
     document.getElementById('filter-month')?.addEventListener('change', () => renderAdminDashboard());
-
     document.getElementById('file-upload-zone')?.addEventListener('click', () => document.getElementById('payment-receipt').click());
     document.getElementById('payment-receipt')?.addEventListener('change', (e) => {
         if (e.target.files[0]) document.getElementById('file-name').innerText = e.target.files[0].name;

@@ -1,5 +1,5 @@
 /**
- * data.js - Gestión de Datos Robusta
+ * data.js - Gestión de Datos Blindada (Modo Global Cloud)
  */
 
 const DataManager = {
@@ -7,7 +7,13 @@ const DataManager = {
 
     init(dbInstance) {
         this.db = dbInstance;
-        console.log("DataManager initialized with DB:", !!dbInstance);
+        console.log("DataManager: Firebase Cloud Link Active");
+    },
+
+    // Generador de ID estándar para evitar pérdidas
+    getValidId(input, fallbackId) {
+        if (fallbackId && fallbackId.length > 5) return fallbackId;
+        return (input || "user").toLowerCase().replace(/[^a-z0-9]/g, '_');
     },
 
     // Config Methods
@@ -17,16 +23,11 @@ const DataManager = {
                 const docRef = window.firebase.firestore.doc(this.db, "settings", "general");
                 const configDoc = await window.firebase.firestore.getDoc(docRef);
                 if (configDoc.exists()) return configDoc.data();
-            } catch (e) { }
+            } catch (e) { console.warn("Usando config local."); }
         }
-        // Fallback Local
-        const localConfig = JSON.parse(localStorage.getItem('correcaminos_config'));
-        return localConfig || {
+        return JSON.parse(localStorage.getItem('correcaminos_config')) || {
             socialFee: 3000,
-            activities: [
-                { name: 'Atletismo', price: 40000 },
-                { name: 'Ajedrez', price: 35000 }
-            ]
+            activities: [{ name: 'Atletismo', price: 40000 }]
         };
     },
 
@@ -36,31 +37,31 @@ const DataManager = {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "settings", "general");
                 await window.firebase.firestore.setDoc(docRef, newConfig);
-            } catch (e) { console.error("Error nube config:", e); }
+            } catch (e) { alert("Error al subir config a la nube. Revisa tus reglas de Firebase."); }
         }
     },
 
     // User Methods
-    async saveUser(uid, userData) {
-        // Guardar en LOCAL
+    async saveUser(rawId, userData) {
+        // Asegurar ID consistente (username slug)
+        const uid = userData.username ? userData.username.toLowerCase().replace(/[^a-z0-9]/g, '_') : rawId;
+
+        // 1. Guardar Local
         const users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
-        const index = users.findIndex(u => u.id === uid);
+        const index = users.findIndex(u => u.id === uid || u.username === userData.username);
 
-        // Mantener campos existentes si no vienen en userData (como email o username)
-        const oldData = index > -1 ? users[index] : {};
-        const mergedData = { ...oldData, id: uid, ...userData };
-
-        if (index > -1) users[index] = mergedData;
-        else users.push(mergedData);
-
+        const finalData = { ...userData, id: uid };
+        if (index > -1) users[index] = finalData;
+        else users.push(finalData);
         localStorage.setItem('correcaminos_users', JSON.stringify(users));
 
-        // Guardar en NUBE (Firestore)
+        // 2. Guardar Nube
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "users", uid);
-                await window.firebase.firestore.setDoc(docRef, mergedData, { merge: true });
-            } catch (e) { console.warn("No se pudo sincronizar con la nube."); }
+                await window.firebase.firestore.setDoc(docRef, finalData);
+                console.log("Usuario sincronizado en la nube:", uid);
+            } catch (e) { console.error("Error nube:", e); }
         }
     },
 
@@ -71,9 +72,8 @@ const DataManager = {
                 const q = window.firebase.firestore.collection(this.db, "users");
                 const snapshot = await window.firebase.firestore.getDocs(q);
                 const cloudUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // Mezclar local y nube (favor de nube)
                 cloudUsers.forEach(cu => {
-                    const idx = allUsers.findIndex(au => au.id === cu.id);
+                    const idx = allUsers.findIndex(au => au.id === cu.id || au.username === cu.username);
                     if (idx > -1) allUsers[idx] = cu;
                     else allUsers.push(cu);
                 });
@@ -83,32 +83,31 @@ const DataManager = {
     },
 
     async deleteUser(uid) {
-        // Local
         let users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
         users = users.filter(u => u.id !== uid);
         localStorage.setItem('correcaminos_users', JSON.stringify(users));
 
-        // Nube
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "users", uid);
                 await window.firebase.firestore.deleteDoc(docRef);
-            } catch (e) { console.error("Error al eliminar en la nube:", e); }
+            } catch (e) { }
         }
     },
 
-    // Payment Methods
+    // Payments
     async getPayments() {
-        let payments = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
+        let payments = [];
         if (this.db) {
             try {
                 const q = window.firebase.firestore.collection(this.db, "payments");
                 const snapshot = await window.firebase.firestore.getDocs(q);
-                const cloudPayments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                cloudPayments.forEach(cp => {
-                    if (!payments.find(p => p.id === cp.id)) payments.push(cp);
-                });
-            } catch (e) { }
+                payments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            } catch (e) {
+                payments = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
+            }
+        } else {
+            payments = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
         }
         return payments.sort((a, b) => b.timestamp - a.timestamp);
     },
@@ -119,37 +118,33 @@ const DataManager = {
     },
 
     async addPayment(payment) {
-        payment.id = 'pay_' + Date.now();
-        payment.date = new Date().toISOString().split('T')[0];
+        const payId = 'pay_' + Date.now();
+        payment.id = payId;
         payment.timestamp = Date.now();
+        payment.date = new Date().toLocaleDateString('es-AR');
 
-        // Guardar Local
-        const payments = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
-        payments.push(payment);
-        localStorage.setItem('correcaminos_payments', JSON.stringify(payments));
-
-        // Guardar Nube
         if (this.db) {
             try {
-                await window.firebase.firestore.addDoc(window.firebase.firestore.collection(this.db, "payments"), payment);
+                const docRef = window.firebase.firestore.doc(this.db, "payments", payId);
+                await window.firebase.firestore.setDoc(docRef, payment);
             } catch (e) { }
         }
+        const local = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
+        local.push(payment);
+        localStorage.setItem('correcaminos_payments', JSON.stringify(local));
     },
 
     async updatePaymentStatus(paymentId, status) {
-        // Local
-        const payments = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
-        const p = payments.find(pay => pay.id === paymentId);
-        if (p) p.status = status;
-        localStorage.setItem('correcaminos_payments', JSON.stringify(payments));
-
-        // Nube
         if (this.db) {
             try {
-                const paymentRef = window.firebase.firestore.doc(this.db, "payments", paymentId);
-                await window.firebase.firestore.updateDoc(paymentRef, { status: status });
+                const docRef = window.firebase.firestore.doc(this.db, "payments", paymentId);
+                await window.firebase.firestore.updateDoc(docRef, { status: status });
             } catch (e) { }
         }
+        const local = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
+        const p = local.find(x => x.id === paymentId);
+        if (p) p.status = status;
+        localStorage.setItem('correcaminos_payments', JSON.stringify(local));
     },
 
     subscribeToPayments(callback) {

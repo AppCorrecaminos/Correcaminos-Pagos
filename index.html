@@ -132,6 +132,10 @@
                     </div>
                 </div>
 
+                <div id="breakdown-container" class="dashboard-content" style="margin-bottom: 2rem;">
+                    <!-- Tabla de desglose por hijo se insertará aquí -->
+                </div>
+
                 <div class="dashboard-content">
                     <div class="card payment-history">
                         <div class="card-header">
@@ -191,6 +195,45 @@
                         </div>
                     </header>
 
+                    <div class="stats-grid" id="admin-stats-grid">
+                        <!-- ... stats ... -->
+                    </div>
+
+                    <div class="card filters-card">
+                        <div class="filters-row">
+                            <div class="filter-group">
+                                <label>Estado:</label>
+                                <select id="filter-status">
+                                    <option value="all">Todos</option>
+                                    <option value="pending">Pendientes</option>
+                                    <option value="approved">Aprobados</option>
+                                    <option value="rejected">Rechazados</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <label>Mes:</label>
+                                <select id="filter-month">
+                                    <option value="all">Todos los meses</option>
+                                    <option value="Enero">Enero</option>
+                                    <option value="Febrero">Febrero</option>
+                                    <option value="Marzo">Marzo</option>
+                                    <option value="Abril">Abril</option>
+                                    <option value="Mayo">Mayo</option>
+                                    <option value="Junio">Junio</option>
+                                    <option value="Julio">Julio</option>
+                                    <option value="Agosto">Agosto</option>
+                                    <option value="Septiembre">Septiembre</option>
+                                    <option value="Octubre">Octubre</option>
+                                    <option value="Noviembre">Noviembre</option>
+                                    <option value="Diciembre">Diciembre</option>
+                                </select>
+                            </div>
+                            <button id="btn-export-csv" class="btn-text">
+                                <i class="fas fa-file-export"></i> Exportar Excel (CSV)
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="card">
                         <div class="table-responsive">
                             <table id="admin-payments-table">
@@ -245,30 +288,52 @@
 
                 <div id="admin-config" class="admin-tab">
                     <header class="dashboard-header">
-                        <h2>Configuración</h2>
-                        <p>Actualiza los valores de las cuotas</p>
+                        <h2>Configuración General</h2>
+                        <p>Gestiona los valores de las cuotas y las actividades disponibles</p>
                     </header>
 
                     <div class="config-grid">
+                        <!-- Valores Base -->
                         <div class="card">
                             <div class="card-header">
-                                <h3>Valores de Cuotas</h3>
+                                <h3>Cuota Social Base</h3>
                             </div>
                             <form id="config-fees-form" class="card-body">
                                 <div class="form-group">
-                                    <label for="config-athletics">Actividad Deportiva ($)</label>
-                                    <input type="number" id="config-athletics" value="40000" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="config-social">Cuota Social ($)</label>
+                                    <label for="config-social">Valor Cuota Social ($)</label>
                                     <input type="number" id="config-social" value="3000" required>
                                 </div>
-                                <div class="form-group total-preview">
-                                    <label>Total Actual:</label>
-                                    <span id="config-total-preview">$43.000</span>
-                                </div>
-                                <button type="submit" class="btn-primary">Guardar Cambios</button>
+                                <button type="submit" class="btn-primary">Guardar Cuota Social</button>
                             </form>
+                        </div>
+
+                        <!-- Gestión de Actividades -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Actividades y Costos</h3>
+                                <button class="btn-primary btn-sm" id="btn-add-activity-row">
+                                    <i class="fas fa-plus"></i> Nueva Actividad
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-sm">Define las actividades y sus precios mensuales.</p>
+                                <div class="table-responsive">
+                                    <table id="activities-config-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Actividad</th>
+                                                <th>Costo ($)</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- Filas de actividades dinámicas -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <button id="btn-save-activities" class="btn-primary" style="margin-top: 1rem;">Guardar
+                                    Actividades</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -344,8 +409,10 @@
                         <input type="text" id="reg-email" placeholder="ej: patricio" required>
                     </div>
                     <div class="form-group">
-                        <label for="reg-children">Nombre de los hijos (separados por coma)</label>
-                        <input type="text" id="reg-children" placeholder="Ej: Juan, Maria" required>
+                        <label for="reg-children">Nombres y Categorías</label>
+                        <textarea id="reg-children" placeholder="Ej: Juan (Infantil), Maria (Juvenil)" rows="2"
+                            required></textarea>
+                        <small>Usa el formato: Nombre (Categoría)</small>
                     </div>
                     <div class="form-group">
                         <label for="reg-pass">Contraseña Inicial</label>
@@ -361,6 +428,43 @@
                     <div class="modal-actions">
                         <button type="button" class="btn-text close-modal">Cancelar</button>
                         <button type="submit" class="btn-primary">Crear Usuario</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal para Editar Usuario -->
+        <div id="edit-user-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Editar Usuario</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <form id="edit-user-form">
+                    <input type="hidden" id="edit-u-id">
+                    <div class="form-group">
+                        <label for="edit-u-name">Nombre del Padre / Madre</label>
+                        <input type="text" id="edit-u-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-u-children">Hijos y Categorías</label>
+                        <textarea id="edit-u-children" rows="2" required></textarea>
+                        <small>Ej: Juan (Infantil), Maria (Juvenil)</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-u-pass">Contraseña</label>
+                        <input type="password" id="edit-u-pass" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-u-role">Rol</label>
+                        <select id="edit-u-role">
+                            <option value="user">Padre (Usuario)</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-text close-modal">Cancelar</button>
+                        <button type="submit" class="btn-primary">Guardar Cambios</button>
                     </div>
                 </form>
             </div>

@@ -1,10 +1,10 @@
 /**
  * firebase-config.js
- * Pega aquí tus credenciales obtenidas en la consola de Firebase
+ * Configuración global para Firebase
  */
 
-export const firebaseConfig = {
- apiKey: "AIzaSyBsV1av9R0RfNiGf_8tXugsXmxym0jt5CI",
+window.firebaseConfig = {
+    apiKey: "AIzaSyBsV1av9R0RfNiGf_8tXugsXmxym0jt5CI",
     authDomain: "correcaminos-e567e.firebaseapp.com",
     projectId: "correcaminos-e567e",
     storageBucket: "correcaminos-e567e.firebasestorage.app",

@@ -21,7 +21,13 @@ const DataManager = {
         }
         // Fallback Local
         const localConfig = JSON.parse(localStorage.getItem('correcaminos_config'));
-        return localConfig || { athleticsFee: 40000, socialFee: 3000 };
+        return localConfig || {
+            socialFee: 3000,
+            activities: [
+                { name: 'Atletismo', price: 40000 },
+                { name: 'Ajedrez', price: 35000 }
+            ]
+        };
     },
 
     async updateConfig(newConfig) {
@@ -39,16 +45,22 @@ const DataManager = {
         // Guardar en LOCAL
         const users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
         const index = users.findIndex(u => u.id === uid);
-        if (index > -1) users[index] = { id: uid, ...userData };
-        else users.push({ id: uid, ...userData });
+
+        // Mantener campos existentes si no vienen en userData (como email o username)
+        const oldData = index > -1 ? users[index] : {};
+        const mergedData = { ...oldData, id: uid, ...userData };
+
+        if (index > -1) users[index] = mergedData;
+        else users.push(mergedData);
+
         localStorage.setItem('correcaminos_users', JSON.stringify(users));
 
-        // Guardar en NUBE
+        // Guardar en NUBE (Firestore)
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "users", uid);
-                await window.firebase.firestore.setDoc(docRef, userData);
-            } catch (e) { console.warn("No se pudo guardar en la nube, guardado solo local."); }
+                await window.firebase.firestore.setDoc(docRef, mergedData, { merge: true });
+            } catch (e) { console.warn("No se pudo sincronizar con la nube."); }
         }
     },
 
@@ -68,6 +80,21 @@ const DataManager = {
             } catch (e) { }
         }
         return allUsers;
+    },
+
+    async deleteUser(uid) {
+        // Local
+        let users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
+        users = users.filter(u => u.id !== uid);
+        localStorage.setItem('correcaminos_users', JSON.stringify(users));
+
+        // Nube
+        if (this.db) {
+            try {
+                const docRef = window.firebase.firestore.doc(this.db, "users", uid);
+                await window.firebase.firestore.deleteDoc(docRef);
+            } catch (e) { console.error("Error al eliminar en la nube:", e); }
+        }
     },
 
     // Payment Methods

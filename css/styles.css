@@ -65,6 +65,57 @@ body {
     }
 }
 
+/* Filters */
+.filters-card {
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+}
+
+.filters-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: flex-end;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.filter-group select {
+    padding: 0.8rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-family: inherit;
+    background: white;
+}
+
+.btn-text.export {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+/* Children Breakdown Table */
+.children-fees {
+    width: 100%;
+    margin-top: 1rem;
+    border-collapse: collapse;
+}
+
+.children-fees td {
+    padding: 0.5rem;
+    border-bottom: 1px solid #eee;
+}
+
+.cost-tag {
+    background: #f0f4f8;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
 /* Components: Buttons */
 .btn-primary {
     background-color: var(--primary);

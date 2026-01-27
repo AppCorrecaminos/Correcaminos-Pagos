@@ -14,25 +14,35 @@ const Auth = {
     init(authInstance, dbInstance) {
         this.auth = authInstance;
         this.db = dbInstance;
-        console.log("Auth initialized with backend:", !!authInstance);
+        console.log("Auth initialized.");
     },
 
-    async login(emailOrUser, password) {
-        const usernameInput = emailOrUser.toLowerCase().split('@')[0];
+    // Generador de ID consistente
+    getUserId(input) {
+        if (!input) return "";
+        const email = input.includes('@') ? input : `${input}@correcaminos.com`;
+        return email.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
+    },
 
-        // 1. Intentar con usuarios fijos
+    async login(userInput, password) {
+        if (!userInput || !password) return { success: false, message: "Ingresa usuario y contraseña." };
+
+        const usernameInput = userInput.toLowerCase().split('@')[0];
+
+        // 1. Intentar con usuarios fijos (admin/padre)
         const hardcoded = this.localUsers.find(u => u.username.toLowerCase() === usernameInput && u.password === password);
         if (hardcoded) {
             localStorage.setItem('correcaminos_session', JSON.stringify(hardcoded));
             return { success: true, user: hardcoded };
         }
 
-        // 2. Intentar buscar en Usuarios creados por el Admin (LocalStorage)
+        // 2. Intentar buscar en LocalStorage
         const savedLocalUsers = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
         const localSaved = savedLocalUsers.find(u => {
-            const storedUser = u.username || u.email || '';
-            return storedUser.toLowerCase().split('@')[0] === usernameInput && u.password === password;
+            const storedUser = (u.username || u.email || '').toLowerCase();
+            return (storedUser === userInput.toLowerCase() || storedUser.split('@')[0] === usernameInput) && u.password === password;
         });
+
         if (localSaved) {
             localStorage.setItem('correcaminos_session', JSON.stringify(localSaved));
             return { success: true, user: localSaved };
@@ -41,19 +51,25 @@ const Auth = {
         // 3. Intentar con Firestore (Nube)
         if (this.db) {
             try {
-                const userId = emailOrUser.includes('@') ? emailOrUser.replace(/[^a-zA-Z0-9]/g, '_') : `${emailOrUser}@correcaminos.com`.replace(/[^a-zA-Z0-9]/g, '_');
-                const userDocRef = window.firebase.firestore.doc(this.db, "users", userId);
-                const userDoc = await window.firebase.firestore.getDoc(userDocRef);
+                // Probar con ID directo y con ID formateado
+                const idsToTry = [
+                    userInput.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_'),
+                    this.getUserId(userInput)
+                ];
 
-                if (userDoc.exists()) {
-                    const data = userDoc.data();
-                    if (data.password === password) {
-                        const sessionData = { id: userId, ...data };
-                        localStorage.setItem('correcaminos_session', JSON.stringify(sessionData));
-                        return { success: true, user: sessionData };
+                for (let uid of idsToTry) {
+                    const userDocRef = window.firebase.firestore.doc(this.db, "users", uid);
+                    const userDoc = await window.firebase.firestore.getDoc(userDocRef);
+                    if (userDoc.exists()) {
+                        const data = userDoc.data();
+                        if (data.password === password) {
+                            const sessionData = { id: uid, ...data };
+                            localStorage.setItem('correcaminos_session', JSON.stringify(sessionData));
+                            return { success: true, user: sessionData };
+                        }
                     }
                 }
-            } catch (e) { console.warn("Firestore access denied:", e); }
+            } catch (e) { console.error("Error login nube:", e); }
         }
 
         return { success: false, message: "Usuario o contraseña incorrectos." };

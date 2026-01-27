@@ -47,6 +47,7 @@
                 orderBy: (field, dir) => ({ field, dir }),
                 getDocs: (query) => query.get(),
                 addDoc: (collRef, data) => collRef.add(data),
+                deleteDoc: (docRef) => docRef.delete(),
                 onSnapshot: (query, cb, err) => query.onSnapshot(cb, err)
             }
         };
@@ -304,6 +305,14 @@
                                     <input type="number" id="config-social" value="3000" required>
                                 </div>
                                 <button type="submit" class="btn-primary">Guardar Cuota Social</button>
+                                <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #eee;">
+                                    <p class="text-xs" style="margin-bottom: 0.5rem; color: #666;">Si creaste usuarios
+                                        antes de configurar Firebase, úsalos para subirlos a la nube:</p>
+                                    <button id="btn-sync-to-cloud" class="btn-text"
+                                        style="color: var(--secondary); font-weight: 600;">
+                                        <i class="fas fa-cloud-upload-alt"></i> 📤 Subir Usuarios Locales a la Nube
+                                    </button>
+                                </div>
                             </form>
                         </div>
 

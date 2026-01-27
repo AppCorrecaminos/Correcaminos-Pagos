@@ -715,6 +715,26 @@ select {
     font-size: 0.875rem;
 }
 
+/* Breakdown Card */
+#breakdown-container .card {
+    border-left: 5px solid var(--secondary);
+    background: #fdfdfd;
+}
+
+#btn-sync-to-cloud {
+    background: #f0f7ff;
+    border: 1px dashed var(--secondary);
+    padding: 0.8rem;
+    border-radius: 8px;
+    width: 100%;
+    transition: all 0.3s;
+}
+
+#btn-sync-to-cloud:hover {
+    background: var(--secondary);
+    color: white !important;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .nav-menu {

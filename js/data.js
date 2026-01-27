@@ -35,8 +35,8 @@ const DataManager = {
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "settings", "general");
-                await window.firebase.firestore.updateDoc(docRef, newConfig);
-            } catch (e) { }
+                await window.firebase.firestore.setDoc(docRef, newConfig);
+            } catch (e) { console.error("Error nube config:", e); }
         }
     },
 

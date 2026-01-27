@@ -256,16 +256,26 @@ function setupEventListeners() {
         e.preventDefault();
         const btn = e.target;
         btn.disabled = true;
-        btn.innerText = "Sincronizando...";
-        const users = await window.DataManager.getUsers();
-        if (users.length === 0) {
-            alert("No hay usuarios locales.");
-        } else {
+        btn.innerText = "Sincronizando todo...";
+
+        try {
+            // 1. Sincronizar Usuarios
+            const users = await window.DataManager.getUsers();
             for (let u of users) { await window.DataManager.saveUser(u.id || u.username, u); }
-            alert("¡Éxito! Usuarios subidos a la Nube.");
+
+            // 2. Sincronizar Configuración (Precios y Actividades)
+            const config = await window.DataManager.getConfig();
+            const res = await window.DataManager.updateConfig(config);
+
+            if (res) alert("¡Sincronización Exitosa! Usuarios y Precios subidos a la Nube.");
+            else alert("Error: Se subieron los usuarios pero no los precios. Revisa Firebase.");
+
+        } catch (err) {
+            alert("Error: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "📤 Subir Todo a la Nube";
         }
-        btn.disabled = false;
-        btn.innerText = "📤 Subir Usuarios Locales a la Nube";
     });
 
     // Pagos

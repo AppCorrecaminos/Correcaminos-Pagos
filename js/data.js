@@ -1,5 +1,5 @@
 /**
- * data.js - Gestión de Datos Blindada (Modo Global Cloud)
+ * data.js - Gestión de Datos con Sincronización Doble
  */
 
 const DataManager = {
@@ -7,25 +7,19 @@ const DataManager = {
 
     init(dbInstance) {
         this.db = dbInstance;
-        console.log("DataManager: Firebase Cloud Link Active");
+        console.log("DataManager: Conectado a Firebase");
     },
 
-    // Generador de ID estándar para evitar pérdidas
-    getValidId(input, fallbackId) {
-        if (fallbackId && fallbackId.length > 5) return fallbackId;
-        return (input || "user").toLowerCase().replace(/[^a-z0-9]/g, '_');
-    },
-
-    // Config Methods
     async getConfig() {
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "settings", "general");
                 const configDoc = await window.firebase.firestore.getDoc(docRef);
                 if (configDoc.exists()) return configDoc.data();
-            } catch (e) { console.warn("Usando config local."); }
+            } catch (e) { console.warn("Error leyendo config de nube:", e); }
         }
-        return JSON.parse(localStorage.getItem('correcaminos_config')) || {
+        const local = localStorage.getItem('correcaminos_config');
+        return local ? JSON.parse(local) : {
             socialFee: 3000,
             activities: [{ name: 'Atletismo', price: 40000 }]
         };
@@ -37,31 +31,33 @@ const DataManager = {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "settings", "general");
                 await window.firebase.firestore.setDoc(docRef, newConfig);
-            } catch (e) { alert("Error al subir config a la nube. Revisa tus reglas de Firebase."); }
+                return true;
+            } catch (e) {
+                console.error("Error guardando config en nube:", e);
+                return false;
+            }
         }
+        return true;
     },
 
-    // User Methods
-    async saveUser(rawId, userData) {
-        // Asegurar ID consistente (username slug)
-        const uid = userData.username ? userData.username.toLowerCase().replace(/[^a-z0-9]/g, '_') : rawId;
+    async saveUser(uid, userData) {
+        // Normalizar ID
+        const finalId = userData.username ? userData.username.toLowerCase().replace(/[^a-z0-9]/g, '_') : uid;
+        const finalData = { ...userData, id: finalId };
 
-        // 1. Guardar Local
+        // Local
         const users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
-        const index = users.findIndex(u => u.id === uid || u.username === userData.username);
-
-        const finalData = { ...userData, id: uid };
-        if (index > -1) users[index] = finalData;
+        const idx = users.findIndex(u => u.id === finalId);
+        if (idx > -1) users[idx] = finalData;
         else users.push(finalData);
         localStorage.setItem('correcaminos_users', JSON.stringify(users));
 
-        // 2. Guardar Nube
+        // Nube
         if (this.db) {
             try {
-                const docRef = window.firebase.firestore.doc(this.db, "users", uid);
+                const docRef = window.firebase.firestore.doc(this.db, "users", finalId);
                 await window.firebase.firestore.setDoc(docRef, finalData);
-                console.log("Usuario sincronizado en la nube:", uid);
-            } catch (e) { console.error("Error nube:", e); }
+            } catch (e) { console.error("Error nube user:", e); }
         }
     },
 
@@ -73,7 +69,7 @@ const DataManager = {
                 const snapshot = await window.firebase.firestore.getDocs(q);
                 const cloudUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 cloudUsers.forEach(cu => {
-                    const idx = allUsers.findIndex(au => au.id === cu.id || au.username === cu.username);
+                    const idx = allUsers.findIndex(au => au.id === cu.id);
                     if (idx > -1) allUsers[idx] = cu;
                     else allUsers.push(cu);
                 });
@@ -86,7 +82,6 @@ const DataManager = {
         let users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
         users = users.filter(u => u.id !== uid);
         localStorage.setItem('correcaminos_users', JSON.stringify(users));
-
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "users", uid);
@@ -95,21 +90,15 @@ const DataManager = {
         }
     },
 
-    // Payments
     async getPayments() {
-        let payments = [];
         if (this.db) {
             try {
                 const q = window.firebase.firestore.collection(this.db, "payments");
                 const snapshot = await window.firebase.firestore.getDocs(q);
-                payments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            } catch (e) {
-                payments = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
-            }
-        } else {
-            payments = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
+                return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => b.timestamp - a.timestamp);
+            } catch (e) { }
         }
-        return payments.sort((a, b) => b.timestamp - a.timestamp);
+        return JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
     },
 
     async getPaymentsByUser(userId) {
@@ -122,7 +111,6 @@ const DataManager = {
         payment.id = payId;
         payment.timestamp = Date.now();
         payment.date = new Date().toLocaleDateString('es-AR');
-
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "payments", payId);
@@ -134,36 +122,32 @@ const DataManager = {
         localStorage.setItem('correcaminos_payments', JSON.stringify(local));
     },
 
-    async updatePaymentStatus(paymentId, status) {
+    async updatePaymentStatus(id, status) {
         if (this.db) {
             try {
-                const docRef = window.firebase.firestore.doc(this.db, "payments", paymentId);
-                await window.firebase.firestore.updateDoc(docRef, { status: status });
+                const docRef = window.firebase.firestore.doc(this.db, "payments", id);
+                await window.firebase.firestore.updateDoc(docRef, { status });
             } catch (e) { }
         }
         const local = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
-        const p = local.find(x => x.id === paymentId);
+        const p = local.find(x => x.id === id);
         if (p) p.status = status;
         localStorage.setItem('correcaminos_payments', JSON.stringify(local));
     },
 
-    subscribeToPayments(callback) {
+    subscribeToPayments(cb) {
         if (!this.db) return () => { };
-        return window.firebase.firestore.onSnapshot(
-            window.firebase.firestore.collection(this.db, "payments"),
-            (snapshot) => {
-                const payments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                callback(payments);
-            }
-        );
+        return window.firebase.firestore.onSnapshot(window.firebase.firestore.collection(this.db, "payments"), (snap) => {
+            cb(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        });
     },
 
     fileToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = error => reject(error);
+        return new Promise((res, rej) => {
+            const r = new FileReader();
+            r.readAsDataURL(file);
+            r.onload = () => res(r.result);
+            r.onerror = e => rej(e);
         });
     }
 };

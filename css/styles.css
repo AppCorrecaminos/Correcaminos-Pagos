@@ -105,8 +105,24 @@ body {
 }
 
 .children-fees td {
-    padding: 0.5rem;
+    padding: 0.75rem 0.5rem;
     border-bottom: 1px solid #eee;
+    vertical-align: middle;
+}
+
+.child-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 0.75rem;
+    border: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+.child-info {
+    display: inline-flex;
+    align-items: center;
 }
 
 .cost-tag {
@@ -229,6 +245,12 @@ body {
     color: var(--text-main);
 }
 
+.form-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
 .input-icon {
     position: relative;
     display: flex;
@@ -275,17 +297,34 @@ body {
 .nav-brand {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 1rem;
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.brand-main {
     font-weight: 700;
     color: var(--primary);
-    font-size: 1.25rem;
+    font-size: 1.1rem;
+    letter-spacing: -0.02em;
+}
+
+.brand-sub {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 500;
 }
 
 .nav-logo {
-    width: 40px;
-    height: 40px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
     object-fit: cover;
+    border: 2px solid #eee;
 }
 
 .nav-menu {

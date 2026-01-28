@@ -21,6 +21,8 @@ const DataManager = {
         const local = localStorage.getItem('correcaminos_config');
         return local ? JSON.parse(local) : {
             socialFee: 3000,
+            lateFeeAmount: 5000,
+            lateFeeDay: 12,
             activities: [{ name: 'Atletismo', price: 40000, social: true }]
         };
     },

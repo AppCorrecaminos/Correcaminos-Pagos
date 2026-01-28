@@ -139,11 +139,39 @@ async function updateUI() {
             const price = activity ? activity.price : (activities[0]?.price || 40000);
             if (activity && activity.social) appliesSocialFee = true;
             totalActivitiesCost += price;
-            tableRowsHtml += `<tr><td><b>${kid.name}</b> <span class="cost-tag">${kid.category}</span></td><td align="right">$ ${price.toLocaleString('es-AR')}</td></tr>`;
+
+            // Determinar Logo
+            let logoSrc = 'img/Logo Correcaminos.jpeg'; // Default
+            if (kid.category.includes("Infantiles")) {
+                logoSrc = 'img/Logo Kids.jpeg';
+            }
+
+            tableRowsHtml += `
+                <tr>
+                    <td>
+                        <div class="child-info">
+                            <img src="${logoSrc}" class="child-logo" alt="Logo">
+                            <div>
+                                <b>${kid.name}</b> <br>
+                                <span class="cost-tag">${kid.category}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td align="right" style="vertical-align: bottom;">$ ${price.toLocaleString('es-AR')}</td>
+                </tr>`;
         });
 
         const socialFee = appliesSocialFee ? (config.socialFee || 0) : 0;
-        const finalTotal = totalActivitiesCost + socialFee;
+
+        // Lógica de Mora
+        const today = new Date();
+        const dayOfMonth = today.getDate();
+        const lateFeeDay = config.lateFeeDay || 12;
+        const lateFeeAmount = config.lateFeeAmount || 5000;
+        const isLate = dayOfMonth > lateFeeDay;
+        const appliedLateFee = isLate ? lateFeeAmount : 0;
+
+        const finalTotal = totalActivitiesCost + socialFee + appliedLateFee;
 
         if (breakdownContainer) {
             breakdownContainer.innerHTML = `
@@ -152,7 +180,9 @@ async function updateUI() {
                     <div class="card-body">
                         <table class="children-fees">${tableRowsHtml}
                             <tr style="border-top: 2px solid #ddd"><td><b>Cuota Social Familiar</b> ${appliesSocialFee ? '' : '(No aplica)'}</td><td align="right">$ ${socialFee.toLocaleString('es-AR')}</td></tr>
+                            ${isLate ? `<tr style="color: var(--danger); font-weight: 600;"><td><i class="fas fa-exclamation-triangle"></i> Recargo por Mora (Después del día ${lateFeeDay})</td><td align="right">$ ${lateFeeAmount.toLocaleString('es-AR')}</td></tr>` : ''}
                         </table>
+                        ${!isLate ? `<p class="text-xs" style="margin-top: 1rem; color: var(--success);"><i class="fas fa-info-circle"></i> Tienes hasta el día ${lateFeeDay} para abonar sin recargo.</p>` : ''}
                     </div>
                 </div>`;
         }
@@ -161,6 +191,7 @@ async function updateUI() {
             paymentChildrenAssignment.innerHTML = `<label>Resumen de Cobro:</label>
                 <table class="children-fees">${tableRowsHtml}
                     <tr style="border-top: 1px solid #eee"><td>Cuota Social</td><td align="right">$ ${socialFee.toLocaleString('es-AR')}</td></tr>
+                    ${isLate ? `<tr style="color: var(--danger)"><td>Recargo por Mora</td><td align="right">$ ${lateFeeAmount.toLocaleString('es-AR')}</td></tr>` : ''}
                 </table>`;
         }
 
@@ -293,8 +324,10 @@ function setupEventListeners() {
         e.preventDefault();
         const config = await window.DataManager.getConfig();
         config.socialFee = parseInt(document.getElementById('config-social').value);
+        config.lateFeeAmount = parseInt(document.getElementById('config-late-fee').value);
+        config.lateFeeDay = parseInt(document.getElementById('config-late-day').value);
         await window.DataManager.updateConfig(config);
-        toast('Cuota social guardada'); updateUI();
+        toast('Configuración guardada'); updateUI();
     });
 
     document.getElementById('btn-sync-to-cloud')?.addEventListener('click', async (e) => {

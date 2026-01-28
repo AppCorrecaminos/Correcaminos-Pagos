@@ -93,7 +93,10 @@
                 <div class="nav-content">
                     <div class="nav-brand">
                         <img src="img/Logo Correcaminos.jpeg" alt="Logo" class="nav-logo">
-                        <span>Correcaminos</span>
+                        <div class="brand-text">
+                            <span class="brand-main">Asociacion Civil Correcaminos - JF Running</span>
+                            <span class="brand-sub">Escuela de Atletismo Correcaminos</span>
+                        </div>
                     </div>
                     <div class="nav-user">
                         <div id="db-status" class="db-status" title="Estado de la base de datos">
@@ -187,7 +190,10 @@
                 <div class="nav-content">
                     <div class="nav-brand">
                         <img src="img/Logo Correcaminos.jpeg" alt="Logo" class="nav-logo">
-                        <span>Correcaminos Admin</span>
+                        <div class="brand-text">
+                            <span class="brand-main">Asociacion Civil Correcaminos - JF Running</span>
+                            <span class="brand-sub">Escuela de Atletismo Correcaminos (Admin)</span>
+                        </div>
                     </div>
                     <div class="nav-menu">
                         <button class="nav-link active" data-target="admin-reports">Reportes</button>
@@ -373,7 +379,17 @@
                                     <label for="config-social">Valor Cuota Social ($)</label>
                                     <input type="number" id="config-social" value="3000" required>
                                 </div>
-                                <button type="submit" class="btn-primary">Guardar Cuota Social</button>
+                                <div class="form-grid-2">
+                                    <div class="form-group">
+                                        <label for="config-late-fee">Recargo por Mora ($)</label>
+                                        <input type="number" id="config-late-fee" value="5000" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="config-late-day">Día Límite Pago (1-31)</label>
+                                        <input type="number" id="config-late-day" value="12" min="1" max="31" required>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn-primary">Guardar Configuración General</button>
                                 <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #eee;">
                                     <p class="text-xs" style="margin-bottom: 0.5rem; color: #666;">Si creaste usuarios
                                         antes de configurar Firebase, úsalos para subirlos a la nube:</p>

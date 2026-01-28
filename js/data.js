@@ -21,7 +21,7 @@ const DataManager = {
         const local = localStorage.getItem('correcaminos_config');
         return local ? JSON.parse(local) : {
             socialFee: 3000,
-            activities: [{ name: 'Atletismo', price: 40000 }]
+            activities: [{ name: 'Atletismo', price: 40000, social: true }]
         };
     },
 
@@ -122,16 +122,18 @@ const DataManager = {
         localStorage.setItem('correcaminos_payments', JSON.stringify(local));
     },
 
-    async updatePaymentStatus(id, status) {
+    async updatePayment(id, updates) {
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "payments", id);
-                await window.firebase.firestore.updateDoc(docRef, { status });
-            } catch (e) { }
+                await window.firebase.firestore.updateDoc(docRef, updates);
+            } catch (e) { console.error("Error updating payment nube:", e); }
         }
         const local = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
         const p = local.find(x => x.id === id);
-        if (p) p.status = status;
+        if (p) {
+            Object.assign(p, updates);
+        }
         localStorage.setItem('correcaminos_payments', JSON.stringify(local));
     },
 

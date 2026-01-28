@@ -113,22 +113,34 @@
                     <div class="stat-card">
                         <div class="stat-icon athletics"><i class="fas fa-running"></i></div>
                         <div class="stat-info">
-                            <span class="stat-label">Actividad Deportiva</span>
-                            <span class="stat-value" id="fee-athletics">$40.000</span>
+                            <span class="stat-label">Cuota Actividades</span>
+                            <span class="stat-value" id="fee-athletics">$0</span>
                         </div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-icon social"><i class="fas fa-users"></i></div>
                         <div class="stat-info">
                             <span class="stat-label">Cuota Social</span>
-                            <span class="stat-value" id="fee-social">$3.000</span>
+                            <span class="stat-value" id="fee-social">$0</span>
                         </div>
                     </div>
                     <div class="stat-card highlight">
-                        <div class="stat-icon total"><i class="fas fa-hand-holding-dollar"></i></div>
+                        <div class="stat-icon total"><i class="fas fa-calendar-check"></i></div>
                         <div class="stat-info">
-                            <span class="stat-label">Total Mensual</span>
-                            <span class="stat-value" id="fee-total">$43.000</span>
+                            <span class="stat-label">Estado de Cuenta</span>
+                            <span class="stat-value" id="user-cc-status">Al Día</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Yearly Timeline for Parents -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header">
+                        <h3>Mi Estado Anual (Febrero - Diciembre)</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="yearly-timeline" id="user-yearly-timeline">
+                            <!-- month items will be generated here -->
                         </div>
                     </div>
                 </div>
@@ -175,6 +187,7 @@
                     </div>
                     <div class="nav-menu">
                         <button class="nav-link active" data-target="admin-reports">Reportes</button>
+                        <button class="nav-link" data-target="admin-cc">Cuenta Corriente</button>
                         <button class="nav-link" data-target="admin-users">Usuarios</button>
                         <button class="nav-link" data-target="admin-config">Configuración</button>
                     </div>
@@ -197,7 +210,20 @@
                     </header>
 
                     <div class="stats-grid" id="admin-stats-grid">
-                        <!-- ... stats ... -->
+                        <div class="stat-card">
+                            <div class="stat-icon athletics"><i class="fas fa-clock"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-label">Pendientes de revisión</span>
+                                <span class="stat-value" id="stat-pending">0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card highlight">
+                            <div class="stat-icon total"><i class="fas fa-hand-holding-dollar"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-label">Total Cobrado (Mes)</span>
+                                <span class="stat-value" id="stat-total">$ 0</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="card filters-card">
@@ -250,6 +276,42 @@
                                     </tr>
                                 </thead>
                                 <tbody>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="admin-cc" class="admin-tab">
+                    <header class="dashboard-header">
+                        <div class="header-left">
+                            <h2>Cuenta Corriente</h2>
+                            <p>Estado de deudas y cobros (Mes actual y próximo)</p>
+                        </div>
+                    </header>
+
+                    <div class="card">
+                        <div class="table-responsive">
+                            <table id="admin-cc-table">
+                                <thead>
+                                    <tr>
+                                        <th>Usuario</th>
+                                        <th class="month-col">Feb</th>
+                                        <th class="month-col">Mar</th>
+                                        <th class="month-col">Abr</th>
+                                        <th class="month-col">May</th>
+                                        <th class="month-col">Jun</th>
+                                        <th class="month-col">Jul</th>
+                                        <th class="month-col">Ago</th>
+                                        <th class="month-col">Sep</th>
+                                        <th class="month-col">Oct</th>
+                                        <th class="month-col">Nov</th>
+                                        <th class="month-col">Dic</th>
+                                        <th>Deuda Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Datos de CC se cargarán aquí -->
                                 </tbody>
                             </table>
                         </div>
@@ -332,6 +394,7 @@
                                             <tr>
                                                 <th>Actividad</th>
                                                 <th>Costo ($)</th>
+                                                <th>C. Social?</th>
                                                 <th></th>
                                             </tr>
                                         </thead>
@@ -479,7 +542,55 @@
             </div>
         </div>
 
+        <!-- Modal para Aprobar Pago -->
+        <div id="approve-payment-modal" class="modal">
+            <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h3>Confirmar Cobro</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                        <div>
+                            <p><strong>Comprobante:</strong></p>
+                            <img id="approve-img-preview" src=""
+                                style="width: 100%; border-radius: 8px; margin-top: 0.5rem; cursor: pointer;">
+                            <p class="text-xs" style="margin-top: 0.5rem; color: #666;">Haz clic en la imagen para verla
+                                en tamaño completo.</p>
+                        </div>
+                        <div>
+                            <div class="form-group">
+                                <label>Usuario</label>
+                                <p id="approve-user-name" style="font-weight: 600;"></p>
+                            </div>
+                            <div class="form-group">
+                                <label>Mes a abonar</label>
+                                <p id="approve-month" style="font-weight: 600;"></p>
+                            </div>
+                            <div class="form-group">
+                                <label>Monto Informado</label>
+                                <p id="approve-amount-reported"
+                                    style="color: var(--text-muted); text-decoration: line-through;"></p>
+                            </div>
+                            <div class="form-group">
+                                <label for="confirm-amount">Monto Cobrado Final ($)</label>
+                                <input type="number" id="confirm-amount"
+                                    style="font-size: 1.25rem; font-weight: 700; border: 2px solid var(--primary);"
+                                    required>
+                                <small>Ingresa el monto exacto que figura en el comprobante.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-actions" style="margin-top: 2rem;">
+                    <button type="button" class="btn-text close-modal">Cancelar</button>
+                    <button id="btn-confirm-approve" class="btn-primary">Confirmar y Aprobar</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Toast Notifications -->
+
         <div id="toast-container"></div>
     </div>
 

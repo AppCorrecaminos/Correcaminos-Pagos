@@ -764,3 +764,111 @@ select {
         flex-direction: column;
     }
 }
+
+/* Cuenta Corriente Specific */
+.cc-status {
+    font-size: 0.85rem;
+    line-height: 1.4;
+    padding: 0.25rem 0;
+}
+
+.cc-label {
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    display: inline-block;
+    width: 70px;
+}
+
+.text-red {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+.text-green {
+    color: var(--success);
+    font-weight: 600;
+}
+
+/* Yearly Timeline Parents */
+.yearly-timeline {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 1rem;
+    padding: 1rem 0;
+}
+
+.timeline-month {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem 0.5rem;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    transition: all 0.3s;
+}
+
+.timeline-month.paid {
+    background: #f0fff4;
+    border-color: #9ae6b4;
+    color: #2f855a;
+}
+
+.timeline-month.pending {
+    background: #fff5f5;
+    border-color: #feb2b2;
+    color: #c53030;
+}
+
+.timeline-month.current {
+    box-shadow: 0 0 0 2px var(--primary);
+}
+
+.tm-name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+}
+
+.tm-icon {
+    font-size: 1.25rem;
+}
+
+/* Admin Matrix Table */
+.month-col {
+    text-align: center !important;
+    padding: 1rem 0.5rem !important;
+}
+
+.status-check {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+}
+
+.status-check.ok {
+    background: #38a169;
+    color: white;
+}
+
+.status-check.void {
+    background: #e2e8f0;
+    color: #a0aec0;
+}
+
+.status-check.debt {
+    background: #e53e3e;
+    color: white;
+}
+
+.text-xs {
+    font-size: 0.7rem;
+}

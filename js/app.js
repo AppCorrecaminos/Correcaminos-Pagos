@@ -75,10 +75,14 @@ async function updateUI() {
     if (currentUser.role === 'admin') {
         renderAdminDashboard();
         renderAdminUsers();
+        renderAdminCC();
         renderActivitiesConfig(activities);
         const socIn = document.getElementById('config-social');
         if (socIn) socIn.value = config.socialFee || 3000;
-        window.DataManager.subscribeToPayments((payments) => renderAdminDashboard(payments));
+        window.DataManager.subscribeToPayments((payments) => {
+            renderAdminDashboard(payments);
+            renderAdminCC(payments);
+        });
     } else {
         renderUserDashboard();
         const nameDisp = document.getElementById('user-display-name');
@@ -90,16 +94,18 @@ async function updateUI() {
 
         let totalActivitiesCost = 0;
         let tableRowsHtml = '';
+        let appliesSocialFee = false;
 
         children.forEach(kid => {
             const cleanCategory = kid.category.trim().toLowerCase();
             const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
             const price = activity ? activity.price : (activities[0]?.price || 40000);
+            if (activity && activity.social) appliesSocialFee = true;
             totalActivitiesCost += price;
             tableRowsHtml += `<tr><td><b>${kid.name}</b> <span class="cost-tag">${kid.category}</span></td><td align="right">$ ${price.toLocaleString('es-AR')}</td></tr>`;
         });
 
-        const socialFee = config.socialFee || 0;
+        const socialFee = appliesSocialFee ? (config.socialFee || 0) : 0;
         const finalTotal = totalActivitiesCost + socialFee;
 
         if (breakdownContainer) {
@@ -108,7 +114,7 @@ async function updateUI() {
                     <div class="card-header"><h3>Desglose Detallado por Hijo</h3></div>
                     <div class="card-body">
                         <table class="children-fees">${tableRowsHtml}
-                            <tr style="border-top: 2px solid #ddd"><td><b>Cuota Social Familiar</b></td><td align="right">$ ${socialFee.toLocaleString('es-AR')}</td></tr>
+                            <tr style="border-top: 2px solid #ddd"><td><b>Cuota Social Familiar</b> ${appliesSocialFee ? '' : '(No aplica)'}</td><td align="right">$ ${socialFee.toLocaleString('es-AR')}</td></tr>
                         </table>
                     </div>
                 </div>`;
@@ -184,6 +190,7 @@ function setupEventListeners() {
             document.getElementById(link.dataset.target).classList.add('active');
             document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
             link.classList.add('active');
+            if (link.dataset.target === 'admin-cc') renderAdminCC();
         });
     });
 
@@ -191,7 +198,7 @@ function setupEventListeners() {
     document.getElementById('btn-add-activity-row')?.addEventListener('click', () => {
         const tbody = document.querySelector('#activities-config-table tbody');
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="text" placeholder="Actividad" class="act-name"></td><td><input type="number" placeholder="Costo" class="act-price"></td><td><button class="btn-text btn-del-new"><i class="fas fa-trash"></i></button></td>`;
+        tr.innerHTML = `<td><input type="text" placeholder="Actividad" class="act-name"></td><td><input type="number" placeholder="Costo" class="act-price"></td><td><input type="checkbox" class="act-social" checked></td><td><button class="btn-text btn-del-new"><i class="fas fa-trash"></i></button></td>`;
         tbody.appendChild(tr);
         tr.querySelector('.btn-del-new').addEventListener('click', () => tr.remove());
     });
@@ -202,7 +209,8 @@ function setupEventListeners() {
         rows.forEach(r => {
             const n = r.querySelector('.act-name').value;
             const p = parseInt(r.querySelector('.act-price').value) || 0;
-            if (n) activities.push({ name: n.trim(), price: p });
+            const s = r.querySelector('.act-social').checked;
+            if (n) activities.push({ name: n.trim(), price: p, social: s });
         });
         const c = await window.DataManager.getConfig();
         c.activities = activities;
@@ -319,6 +327,35 @@ function setupEventListeners() {
     document.getElementById('payment-receipt')?.addEventListener('change', (e) => {
         if (e.target.files[0]) document.getElementById('file-name').innerText = e.target.files[0].name;
     });
+
+    // Confirmación de Aprobación Manual
+    document.getElementById('btn-confirm-approve')?.addEventListener('click', async () => {
+        if (!activePaymentForApproval) return;
+        const finalAmount = parseInt(document.getElementById('confirm-amount').value);
+        if (isNaN(finalAmount) || finalAmount <= 0) {
+            alert("Por favor ingresa un monto válido.");
+            return;
+        }
+
+        const btn = document.getElementById('btn-confirm-approve');
+        btn.disabled = true;
+        btn.innerText = "Procesando...";
+
+        try {
+            await window.DataManager.updatePayment(activePaymentForApproval.id, {
+                status: 'approved',
+                amount: finalAmount
+            });
+            document.getElementById('approve-payment-modal').classList.remove('active');
+            toast('Pago aprobado con éxito');
+            renderAdminDashboard();
+        } catch (e) {
+            toast('Error al aprobar', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Confirmar y Aprobar";
+        }
+    });
 }
 
 function renderActivitiesConfig(activities) {
@@ -326,7 +363,7 @@ function renderActivitiesConfig(activities) {
     if (!tbody) return; tbody.innerHTML = '';
     activities.forEach((act, index) => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><input type="text" value="${act.name}" class="act-name"></td><td><input type="number" value="${act.price}" class="act-price"></td><td><button class="btn-text btn-del-act" data-index="${index}"><i class="fas fa-trash"></i></button></td>`;
+        tr.innerHTML = `<td><input type="text" value="${act.name}" class="act-name"></td><td><input type="number" value="${act.price}" class="act-price"></td><td><input type="checkbox" class="act-social" ${act.social ? 'checked' : ''}></td><td><button class="btn-text btn-del-act" data-index="${index}"><i class="fas fa-trash"></i></button></td>`;
         tbody.appendChild(tr);
     });
     tbody.querySelectorAll('.btn-del-act').forEach(btn => btn.addEventListener('click', () => {
@@ -349,34 +386,109 @@ async function renderAdminDashboard(manualPayments = null) {
         if (fMonth !== 'all' && p.month !== fMonth) return;
         if (p.status === 'approved') total += (p.amount || 0);
         if (p.status === 'pending') pending++;
+
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${p.date}</td><td><b>${p.userName}</b><br><small>${p.childrenNames || ''}</small></td><td>${p.month}</td><td>$ ${p.amount.toLocaleString('es-AR')}</td><td><span class="badge badge-${p.status}">${statusMap[p.status]}</span></td><td>
-            ${p.receiptURL ? `<button class="btn-text btn-view-admin-photo" data-id="${p.id}">Ver Foto</button>` : '---'}
-            ${p.status === 'pending' ? `<button class="btn-action approve" data-id="${p.id}"><i class="fas fa-check"></i></button>` : ''}
-        </td>`;
+        tr.innerHTML = `
+            <td>${p.date}</td>
+            <td><b>${p.userName}</b><br><small>${p.childrenNames || ''}</small></td>
+            <td>${p.month}</td>
+            <td>$ ${(p.amount || 0).toLocaleString('es-AR')}</td>
+            <td>${p.receiptURL ? `<button class="btn-text btn-view-admin-photo" data-id="${p.id}"><i class="fas fa-image"></i> Ver Foto</button>` : '---'}</td>
+            <td><span class="badge badge-${p.status}">${statusMap[p.status]}</span></td>
+            <td>
+                ${p.status === 'pending' ? `<button class="btn-action approve" data-id="${p.id}" title="Aprobar Pago"><i class="fas fa-check"></i></button>` : ''}
+            </td>`;
         tbody.appendChild(tr);
     });
     document.getElementById('stat-pending').innerText = pending;
     document.getElementById('stat-total').innerText = `$ ${total.toLocaleString('es-AR')}`;
 
     tbody.querySelectorAll('.approve').forEach(btn => btn.addEventListener('click', async () => {
-        await window.DataManager.updatePaymentStatus(btn.dataset.id, 'approved');
-        toast('Aprobado'); renderAdminDashboard();
+        const p = payments.find(pay => pay.id === btn.dataset.id);
+        if (p) openApproveModal(p);
     }));
+
     tbody.querySelectorAll('.btn-view-admin-photo').forEach(btn => btn.addEventListener('click', () => {
         const p = payments.find(pay => pay.id === btn.dataset.id);
         if (p && p.receiptURL) openImageModal(p.receiptURL);
     }));
 }
 
+let activePaymentForApproval = null;
+
+function openApproveModal(payment) {
+    activePaymentForApproval = payment;
+    document.getElementById('approve-user-name').innerText = payment.userName;
+    document.getElementById('approve-month').innerText = payment.month;
+    document.getElementById('approve-amount-reported').innerText = `$ ${(payment.amount || 0).toLocaleString('es-AR')}`;
+    document.getElementById('confirm-amount').value = payment.amount || 0;
+
+    const img = document.getElementById('approve-img-preview');
+    if (payment.receiptURL) {
+        img.src = payment.receiptURL;
+        img.style.display = 'block';
+        img.onclick = () => openImageModal(payment.receiptURL);
+    } else {
+        img.style.display = 'none';
+    }
+
+    document.getElementById('approve-payment-modal').classList.add('active');
+}
+
 async function renderUserDashboard() {
     const payments = await window.DataManager.getPaymentsByUser(currentUser.id);
+    const config = await window.DataManager.getConfig();
+    const activities = config.activities || [];
+    const socialFee = config.socialFee || 0;
+
+    // 1. Calcular esperado mensual
+    const children = parseChildren(currentUser.children);
+    let monthlyExpected = 0;
+    let appliesSocial = false;
+    children.forEach(kid => {
+        const cleanCategory = kid.category.trim().toLowerCase();
+        const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
+        monthlyExpected += activity ? activity.price : (activities[0]?.price || 0);
+        if (activity && activity.social) appliesSocial = true;
+    });
+    if (appliesSocial) monthlyExpected += socialFee;
+
+    // 2. Renderizar Línea de Tiempo
+    const months = ["Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    const timelineContainer = document.getElementById('user-yearly-timeline');
+    const now = new Date();
+    const currentMonthName = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][now.getMonth()];
+
+    if (timelineContainer) {
+        timelineContainer.innerHTML = '';
+        months.forEach(m => {
+            const paidMonth = payments.filter(p => p.month === m && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0);
+            const isPaid = paidMonth >= monthlyExpected && monthlyExpected > 0;
+            const isCurrent = m === currentMonthName;
+
+            const div = document.createElement('div');
+            div.className = `timeline-month ${isPaid ? 'paid' : (isCurrent ? 'pending' : '')} ${isCurrent ? 'current' : ''}`;
+            div.innerHTML = `
+                <span class="tm-name">${m.substring(0, 3)}</span>
+                <span class="tm-icon"><i class="fas ${isPaid ? 'fa-check-circle' : (isCurrent ? 'fa-exclamation-circle' : 'fa-circle')}"></i></span>
+                <span class="text-xs" style="margin-top:0.5rem">${monthlyExpected > 0 ? (isPaid ? 'Al día' : `$ ${(monthlyExpected - paidMonth).toLocaleString('es-AR')}`) : '---'}</span>
+            `;
+            timelineContainer.appendChild(div);
+        });
+    }
+
+    // Actualizar Estado General
+    const approvedPaymentsCount = payments.filter(p => p.status === 'approved').length;
+    const pendingPaymentsCount = payments.filter(p => p.status === 'pending').length;
+    document.getElementById('user-cc-status').innerText = pendingPaymentsCount > 0 ? 'Pago en Revisión' : (approvedPaymentsCount > 0 ? 'Activo' : 'Pendiente');
+
+    // 3. Tabla de historial
     const tbody = document.querySelector('#payments-table tbody');
     if (!tbody) return; tbody.innerHTML = '';
     const statusMap = { 'pending': 'Pendiente', 'approved': 'Aprobado', 'rejected': 'Rechazado' };
     payments.forEach(p => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${p.month}</td><td>${p.date}</td><td>$ ${p.amount.toLocaleString('es-AR')}</td><td><span class="badge badge-${p.status}">${statusMap[p.status] || p.status}</span></td><td>${p.receiptURL ? `<button class="btn-text btn-view-photo" data-id="${p.id}">Ver</button>` : '---'}</td>`;
+        tr.innerHTML = `<td>${p.month}</td><td>${p.date}</td><td>$ ${p.amount.toLocaleString('es-AR')}</td><td><span class="badge badge-${p.status}">${statusMap[p.status] || p.status}</span></td><td>${p.receiptURL ? `<button class="btn-text btn-view-photo" data-id="${p.id}"><i class="fas fa-eye"></i> Ver</button>` : '---'}</td>`;
         tbody.appendChild(tr);
     });
     tbody.querySelectorAll('.btn-view-photo').forEach(btn => btn.addEventListener('click', () => {
@@ -388,4 +500,62 @@ async function renderUserDashboard() {
 function openImageModal(url) {
     const win = window.open("");
     win.document.write(`<body style="margin:0;display:flex;justify-content:center;background:#000;"><img src="${url}" style="max-height:100vh;"></body>`);
+}
+
+async function renderAdminCC(manualPayments = null) {
+    const users = await window.DataManager.getUsers();
+    const payments = manualPayments || await window.DataManager.getPayments();
+    const config = await window.DataManager.getConfig();
+    const activities = config.activities || [];
+    const socialFee = config.socialFee || 0;
+
+    const tbody = document.querySelector('#admin-cc-table tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const months = ["Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+    users.forEach(u => {
+        if (u.role === 'admin') return;
+
+        const children = parseChildren(u.children);
+        let monthlyExpected = 0;
+        let appliesSocial = false;
+        children.forEach(kid => {
+            const cleanCategory = kid.category.trim().toLowerCase();
+            const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
+            monthlyExpected += activity ? activity.price : (activities[0]?.price || 0);
+            if (activity && activity.social) appliesSocial = true;
+        });
+        if (appliesSocial) monthlyExpected += socialFee;
+
+        let totalDebt = 0;
+        let monthTds = '';
+
+        const userPayments = payments.filter(p => p.userId === (u.id || u.username) && p.status === 'approved');
+
+        months.forEach(m => {
+            const paid = userPayments.filter(p => p.month === m).reduce((sum, p) => sum + p.amount, 0);
+            const isFull = paid >= monthlyExpected && monthlyExpected > 0;
+            const isPartial = paid > 0 && paid < monthlyExpected;
+            const isDebt = paid === 0 && monthlyExpected > 0;
+
+            if (isDebt || isPartial) totalDebt += (monthlyExpected - paid);
+
+            monthTds += `
+                <td class="month-col">
+                    <div class="status-check ${isFull ? 'ok' : (isDebt ? 'debt' : 'void')}" title="${m}: $ ${paid.toLocaleString('es-AR')} de $ ${monthlyExpected.toLocaleString('es-AR')}">
+                        <i class="fas ${isFull ? 'fa-check' : (isDebt ? 'fa-dollar-sign' : 'fa-minus')}"></i>
+                    </div>
+                </td>`;
+        });
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><b>${u.name}</b><br><small>${u.username || u.id}</small></td>
+            ${monthTds}
+            <td><b class="${totalDebt > 0 ? 'text-red' : 'text-green'}" style="font-size: 1.1rem">$ ${totalDebt.toLocaleString('es-AR')}</b></td>
+        `;
+        tbody.appendChild(tr);
+    });
 }

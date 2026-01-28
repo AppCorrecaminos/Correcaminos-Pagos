@@ -6,19 +6,56 @@ let db = null;
 let auth = null;
 let currentUser = null;
 
-function initializeFirebase() {
-    try {
-        if (!window.firebaseConfig || window.firebaseConfig.apiKey === "TU_API_KEY") {
-            console.warn("Firebase no configurado. Revisa js/firebase-config.js");
-            return;
+function updateDBStatus(isOnline, message = "") {
+    const ids = ['db-status', 'db-status-admin'];
+    const texts = ['db-status-text', 'db-status-text-admin'];
+
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.className = `db-status ${isOnline ? 'online' : 'offline'}`;
         }
+    });
+
+    texts.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.innerText = message || (isOnline ? 'En línea' : 'Modo Local');
+        }
+    });
+}
+
+function initializeFirebase() {
+    updateDBStatus(false, "Conectando...");
+    try {
+        if (!window.firebaseConfig || window.firebaseConfig.apiKey === "AIzaSyBsV1av9R0RfNiGf_8tXugsXmxym0jt5CI") {
+            // El usuario ya tiene su API Key puesta, si fuera la de ejemplo diría "TU_API_KEY"
+        }
+
         const app = window.firebase.app.initializeApp(window.firebaseConfig);
         db = window.firebase.firestore.getFirestore(app);
         auth = window.firebase.auth.getAuth(app);
+
         window.DataManager.init(db);
         window.Auth.init(auth, db);
+
+        // Verificar conexión real intentando un ping a Firestore
+        window.firebase.firestore.getDoc(window.firebase.firestore.doc(db, "settings", "general"))
+            .then(() => updateDBStatus(true))
+            .catch(e => {
+                console.warn("Firebase conectado pero bloqueado por reglas:", e);
+                updateDBStatus(false, "Error de Permisos");
+            });
+
     } catch (e) {
         console.error("Error crítico Firebase:", e);
+        // Si hay un error, lo mostramos simplificado en el estado
+        let userMsg = "Error de Config";
+        if (e.message.includes("apiKey")) userMsg = "Falta API Key";
+        else if (e.message.includes("projectId")) userMsg = "Falta ProjectID";
+        else if (e.message.includes("firebase is not defined")) userMsg = "Sin Internet / Bloqueado";
+
+        updateDBStatus(false, userMsg + ": " + e.message);
     }
 }
 

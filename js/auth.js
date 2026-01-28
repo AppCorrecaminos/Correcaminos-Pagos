@@ -23,36 +23,46 @@ const Auth = {
         // Búsqueda en Nube
         if (this.db) {
             try {
-                // 1. Intentar por ID directo
+                // 1. Intentar por ID directo (más rápido)
                 const docRef = window.firebase.firestore.doc(this.db, "users", slugId);
                 const docSnap = await window.firebase.firestore.getDoc(docRef);
 
-                if (docSnap.exists()) {
+                // En Firebase Compat, 'exists' es una propiedad booleana, no una función
+                if (docSnap.exists) {
                     const data = docSnap.data();
-                    if (data.password === password) {
+                    if (String(data.password) === String(password)) {
                         const session = { id: slugId, ...data };
                         localStorage.setItem('correcaminos_session', JSON.stringify(session));
                         return { success: true, user: session };
                     }
                 }
 
-                // 2. Intentar buscar por campo 'username' por si el ID es distinto
-                const q = window.firebase.firestore.collection(this.db, "users");
-                const snapshot = await window.firebase.firestore.getDocs(q);
-                const cloudUser = snapshot.docs.find(d => {
-                    const dData = d.data();
-                    return (dData.username && dData.username.toLowerCase() === usernameInput) && dData.password === password;
+                // 2. Búsqueda por campo 'username' o 'name' (Backup)
+                const usersRef = window.firebase.firestore.collection(this.db, "users");
+                const snapshot = await window.firebase.firestore.getDocs(usersRef);
+
+                let cloudUser = null;
+                snapshot.forEach(doc => {
+                    const d = doc.data();
+                    const isNameMatch = d.name && d.name.toLowerCase() === usernameInput;
+                    const isUserMatch = d.username && d.username.toLowerCase() === usernameInput;
+
+                    if ((isNameMatch || isUserMatch) && String(d.password) === String(password)) {
+                        cloudUser = { id: doc.id, ...d };
+                    }
                 });
 
                 if (cloudUser) {
-                    const session = { id: cloudUser.id, ...cloudUser.data() };
-                    localStorage.setItem('correcaminos_session', JSON.stringify(session));
-                    return { success: true, user: session };
+                    localStorage.setItem('correcaminos_session', JSON.stringify(cloudUser));
+                    return { success: true, user: cloudUser };
                 }
 
             } catch (e) {
                 console.error("Error Firebase Auth:", e);
-                return { success: false, message: "Error de conexión con la nube. ¿Configuraste las reglas?" };
+                if (e.code === 'permission-denied') {
+                    return { success: false, message: "Error: No tienes permisos en Firebase. Revisa las REGLAS de tu base de datos (paso 3B)." };
+                }
+                return { success: false, message: "Error de conexión con la nube: " + (e.message || "Desconocido") };
             }
         }
 

@@ -1,6 +1,6 @@
 /**
  * firebase-config.js
- * Configuración global para Firebase
+ * Configuración global para Firebase con tus credenciales reales
  */
 
 window.firebaseConfig = {
@@ -10,4 +10,5 @@ window.firebaseConfig = {
     storageBucket: "correcaminos-e567e.firebasestorage.app",
     messagingSenderId: "690850327925",
     appId: "1:690850327925:web:9ed8f70ce3f8c1be93373c",
+    measurementId: "G-L2TWQ8FZ09"
 };

@@ -23,26 +23,27 @@
 
     <!-- Traducimos la API modular a algo que los scripts actuales entiendan -->
     <script>
+        // Guardamos el Firebase original (SDK) para no perderlo
+        const _realFirebase = window.firebase;
+
         window.firebase = {
-            app: { initializeApp: (config) => firebase.initializeApp(config) },
+            app: {
+                initializeApp: (config) => _realFirebase.initializeApp(config)
+            },
             auth: {
-                getAuth: (app) => firebase.auth(),
+                getAuth: (app) => _realFirebase.auth(),
                 signInWithEmailAndPassword: (auth, email, pass) => auth.signInWithEmailAndPassword(email, pass),
                 signOut: (auth) => auth.signOut(),
                 onAuthStateChanged: (auth, cb) => auth.onAuthStateChanged(cb)
             },
             firestore: {
-                getFirestore: (app) => firebase.firestore(),
+                getFirestore: (app) => _realFirebase.firestore(),
                 doc: (db, coll, id) => db.collection(coll).doc(id),
                 collection: (db, coll) => db.collection(coll),
                 getDoc: (docRef) => docRef.get(),
                 setDoc: (docRef, data) => docRef.set(data),
                 updateDoc: (docRef, data) => docRef.update(data),
-                query: (collRef, ...constraints) => {
-                    let q = collRef;
-                    // Simplificación para los métodos usados
-                    return q;
-                },
+                query: (collRef, ...constraints) => collRef,
                 where: (field, op, val) => ({ field, op, val }),
                 orderBy: (field, dir) => ({ field, dir }),
                 getDocs: (query) => query.get(),
@@ -95,6 +96,9 @@
                         <span>Correcaminos</span>
                     </div>
                     <div class="nav-user">
+                        <div id="db-status" class="db-status" title="Estado de la base de datos">
+                            <i class="fas fa-circle"></i> <span id="db-status-text">Conectando...</span>
+                        </div>
                         <span id="user-display-name">Padre de Familia</span>
                         <button class="btn-logout" id="logout-btn">
                             <i class="fas fa-sign-out-alt"></i>
@@ -192,6 +196,9 @@
                         <button class="nav-link" data-target="admin-config">Configuración</button>
                     </div>
                     <div class="nav-user">
+                        <div id="db-status-admin" class="db-status" title="Estado de la base de datos">
+                            <i class="fas fa-circle"></i> <span id="db-status-text-admin">...</span>
+                        </div>
                         <span>Administrador</span>
                         <button class="btn-logout" id="admin-logout-btn">
                             <i class="fas fa-sign-out-alt"></i>

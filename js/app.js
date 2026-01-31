@@ -130,7 +130,10 @@ async function updateUI() {
     if (!currentUser) return;
     try {
         const config = await window.DataManager.getConfig();
-        const activities = config.activities || [{ name: 'Atletismo', price: 40000, social: true }];
+        const activities = config.activities || [
+            { name: 'Atletismo Eq. Competitivo', price: 40000, social: true },
+            { name: 'Atletismo Infantiles A y B', price: 40000, social: true }
+        ];
 
         if (currentUser.role === 'admin') {
             await renderAdminDashboard();
@@ -502,8 +505,10 @@ function setupEventListeners() {
             for (let u of users) { await window.DataManager.saveUser(u.id || u.username, u); }
             const config = await window.DataManager.getConfig();
             await window.DataManager.updateConfig(config);
-            alert("Sincronización Exitosa.");
-        } catch (err) { alert("Error: " + err.message); } finally {
+            alert("✅ Todos los datos locales se han subido a la nube con éxito.");
+        } catch (err) {
+            alert("❌ Error en la sincronización: " + err.message);
+        } finally {
             btn.disabled = false;
             btn.innerText = "Sincronizar Usuarios Locales";
         }
@@ -536,13 +541,15 @@ function setupEventListeners() {
                 await window.DataManager.saveUser(u.id || u.username, u);
                 count++;
             }
-            alert(`✅ Migración exitosa: ${count} usuarios actualizados.`);
+            alert(`✅ Migración exitosa: ${count} usuarios actualizados en la nube.`);
             updateUI();
         } catch (err) { alert("Error: " + err.message); } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-magic"></i> Migrar Datos a Fichas Técnicas';
         }
     });
+
+
 
     // Pagos
     document.getElementById('payment-report-form')?.addEventListener('submit', async (e) => {

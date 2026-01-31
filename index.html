@@ -156,6 +156,26 @@
                     <!-- Tabla de desglose por hijo se insertará aquí -->
                 </div>
 
+                <!-- Section for Athlete Profiles -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header"
+                        style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <h3>Ficha de Datos - Mis Atletas</h3>
+                            <p class="text-xs">Completa los datos de cada atleta para el seguro y registros técnicos.
+                            </p>
+                        </div>
+                        <button id="btn-add-athlete-manually" class="btn-primary btn-sm">
+                            <i class="fas fa-plus"></i> Añadir Atleta
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="athletes-container" class="athletes-grid">
+                            <!-- Athlete cards will be generated here -->
+                        </div>
+                    </div>
+                </div>
+
                 <div class="dashboard-content">
                     <div class="card payment-history">
                         <div class="card-header">
@@ -337,7 +357,10 @@
                             <h2>Gestión de Usuarios</h2>
                             <p>Lista de padres y alumnos registrados</p>
                         </div>
-                        <div class="header-right">
+                        <div class="header-right" style="display: flex; gap: 1rem;">
+                            <button class="btn-text" id="btn-export-athletes">
+                                <i class="fas fa-file-export"></i> Exportar Atletas (Excel)
+                            </button>
                             <button class="btn-primary" id="btn-add-user">
                                 <i class="fas fa-user-plus"></i> Nuevo Usuario
                             </button>
@@ -390,12 +413,21 @@
                                     </div>
                                 </div>
                                 <button type="submit" class="btn-primary">Guardar Configuración General</button>
+
                                 <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #eee;">
-                                    <p class="text-xs" style="margin-bottom: 0.5rem; color: #666;">Si creaste usuarios
-                                        antes de configurar Firebase, úsalos para subirlos a la nube:</p>
-                                    <button id="btn-sync-to-cloud" class="btn-text"
+                                    <p class="text-xs" style="margin-bottom: 0.5rem; color: #666;"><b>Herramientas de
+                                            Datos:</b></p>
+                                    <button id="btn-migrate-to-athletes" class="btn-text" type="button"
+                                        style="color: var(--danger); font-weight: 600; text-align: left; width: 100%; border: 1px solid var(--danger); padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem;">
+                                        <i class="fas fa-magic"></i> Migrar Datos a Fichas Técnicas
+                                    </button>
+                                    <p class="text-xs" style="color: #999; margin-bottom: 1rem;">Convierte el texto de
+                                        "Hijos" en carpetas individuales habilitando la carga de DNI y ficha completa.
+                                    </p>
+
+                                    <button id="btn-sync-to-cloud" class="btn-text" type="button"
                                         style="color: var(--secondary); font-weight: 600;">
-                                        <i class="fas fa-cloud-upload-alt"></i> 📤 Subir Usuarios Locales a la Nube
+                                        <i class="fas fa-cloud-upload-alt"></i> 📤 Sincronizar Usuarios Locales
                                     </button>
                                 </div>
                             </form>
@@ -467,8 +499,8 @@
                     </div>
                     <div class="form-group">
                         <label for="payment-amount">Monto Total a Pagar ($)</label>
-                        <input type="number" id="payment-amount" value="0" readonly>
-                        <small id="payment-detail-text">Calculado según cantidad de hijos.</small>
+                        <input type="number" id="payment-amount" value="0">
+                        <small id="payment-detail-text">Puedes editar el monto si es necesario.</small>
                     </div>
                     <div class="form-group">
                         <label for="payment-receipt">Foto del Comprobante</label>
@@ -481,7 +513,7 @@
                     </div>
                     <div class="modal-actions">
                         <button type="button" class="btn-text close-modal">Cancelar</button>
-                        <button type="submit" class="btn-primary">Enviar Reporte</button>
+                        <button type="submit" class="btn-primary">Enviar Reporte de Pago</button>
                     </div>
                 </form>
             </div>
@@ -605,15 +637,115 @@
                         </div>
                     </div>
                 </div>
-                <div class="modal-actions" style="margin-top: 2rem;">
-                    <button type="button" class="btn-text close-modal">Cancelar</button>
-                    <button id="btn-confirm-approve" class="btn-primary">Confirmar y Aprobar</button>
+                <div class="modal-actions" style="margin-top: 2rem; display: flex; gap: 1rem;">
+                    <button type="button" class="btn-text close-modal" style="flex:1">Cancelar</button>
+                    <button id="btn-reject-payment" class="btn-action reject"
+                        style="width: auto; padding: 0 1.5rem; height: 45px; border-radius: 8px;">Rechazar</button>
+                    <button id="btn-confirm-approve" class="btn-primary" style="flex:2">Confirmar y Aprobar</button>
                 </div>
             </div>
         </div>
 
-        <!-- Toast Notifications -->
+        <!-- Modal para Rechazar Pago -->
+        <div id="reject-payment-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Rechazar Pago</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="reject-reason">Motivo del rechazo</label>
+                        <textarea id="reject-reason" rows="3"
+                            placeholder="Ej: El comprobante no es legible o el monto no coincide."
+                            style="width: 100%; border-radius: 8px; border: 1px solid var(--border); padding: 0.5rem;"></textarea>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-text close-modal">Cancelar</button>
+                    <button id="btn-confirm-reject" class="btn-primary"
+                        style="background-color: var(--danger);">Confirmar Rechazo</button>
+                </div>
+            </div>
+        </div>
 
+        <!-- Modal para Ficha del Atleta -->
+        <div id="athlete-modal" class="modal">
+            <div class="modal-content" style="max-width: 700px;">
+                <div class="modal-header">
+                    <h3>Datos del Atleta</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <form id="athlete-form">
+                    <input type="hidden" id="ath-index">
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="ath-name">Nombre Completo</label>
+                            <input type="text" id="ath-name" required readonly>
+                        </div>
+                        <div class="form-group">
+                            <label for="ath-dni">DNI</label>
+                            <input type="text" id="ath-dni" placeholder="Sin puntos" required>
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="ath-category">Categoría</label>
+                            <select id="ath-category" required>
+                                <option value="Infantil">Infantil</option>
+                                <option value="U12">U12</option>
+                                <option value="U14">U14</option>
+                                <option value="U16">U16</option>
+                                <option value="U18">U18</option>
+                                <option value="U20">U20</option>
+                                <option value="Mayores">Mayores</option>
+                            </select>
+                            <small>Para cambiar categoría contacte al administrador.</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="ath-activity">Actividad / Categoría de Cobro</label>
+                            <select id="ath-activity" required>
+                                <!-- Activities will be loaded here -->
+                            </select>
+                            <small>Esta actividad determina el costo de la cuota mensual.</small>
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
+                            <label for="ath-phone">Teléfono del Atleta</label>
+                            <input type="tel" id="ath-phone" placeholder="Ej: 2944xxxxxx">
+                        </div>
+                        <div class="form-group">
+                            <label for="ath-email">Correo Electrónico de Contacto</label>
+                            <input type="email" id="ath-email" required>
+                        </div>
+                    </div>
+                    <div class="card" style="padding: 1rem; background: #f8fafc; margin-bottom: 1.5rem;">
+                        <h4 style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--primary);">Datos de los Padres /
+                            Tutores</h4>
+                        <div class="form-group">
+                            <label for="ath-parents-names">Nombres de los Padres</label>
+                            <input type="text" id="ath-parents-names" placeholder="Ej: Juan Perez y Maria Sosa"
+                                required>
+                        </div>
+                        <div class="form-group">
+                            <label for="ath-parents-phone">Teléfono de Contacto (Padres)</label>
+                            <input type="tel" id="ath-parents-phone" placeholder="Emergencias" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="ath-address">Dirección Particular</label>
+                        <input type="text" id="ath-address" placeholder="Calle, Número, Barrio" required>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-text close-modal">Cerrar sin guardar</button>
+                        <button type="submit" class="btn-primary">Guardar Ficha Técnica</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
         <div id="toast-container"></div>
     </div>
 

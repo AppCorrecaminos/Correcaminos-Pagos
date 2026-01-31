@@ -856,6 +856,12 @@ select {
 }
 
 .timeline-month.pending {
+    background: #fffaf0;
+    border-color: #fbd38d;
+    color: #b7791f;
+}
+
+.timeline-month.rejected {
     background: #fff5f5;
     border-color: #feb2b2;
     color: #c53030;
@@ -863,6 +869,8 @@ select {
 
 .timeline-month.current {
     box-shadow: 0 0 0 2px var(--primary);
+    transform: scale(1.05);
+    z-index: 1;
 }
 
 .tm-name {
@@ -903,9 +911,21 @@ select {
     color: #a0aec0;
 }
 
+.status-check.pending {
+    background: #f6ad55;
+    color: white;
+}
+
 .status-check.debt {
     background: #e53e3e;
     color: white;
+}
+
+/* Highlight for current month column in admin CC */
+.current-month-col {
+    background-color: rgba(26, 54, 93, 0.05);
+    border-left: 2px solid var(--primary) !important;
+    border-right: 2px solid var(--primary) !important;
 }
 
 .text-xs {
@@ -956,6 +976,69 @@ select {
         transform: scale(1);
         opacity: 1;
     }
+}
+
+/* Athletes Section */
+.athletes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.athlete-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.athlete-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--primary-light);
+}
+
+.athlete-card.incomplete {
+    border-left: 4px solid var(--warning);
+}
+
+.athlete-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.25rem;
+}
+
+.athlete-card-header h4 {
+    font-size: 1.1rem;
+    color: var(--primary);
+    margin: 0;
+}
+
+.athlete-card-body p {
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+    color: var(--text-main);
+}
+
+.athlete-card-body strong {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.btn-edit-athlete {
+    transition: all 0.2s;
+    background: #f8fafc;
+}
+
+.btn-edit-athlete:hover {
+    background: var(--primary);
+    color: white !important;
+    border-color: var(--primary) !important;
 }
 
 @media (max-width: 480px) {

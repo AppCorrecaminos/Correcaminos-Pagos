@@ -358,32 +358,103 @@ function renderAthletes(children, activities) {
 
 async function renderAdminUsers() {
     const users = await window.DataManager.getUsers();
+    const config = await window.DataManager.getConfig();
+    const activities = config.activities || [];
     const tbody = document.querySelector('#admin-users-table tbody');
-    if (!tbody) return; tbody.innerHTML = '';
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
     users.forEach(u => {
         const id = u.id || u.username;
-        const athletesCount = u.athletes ? u.athletes.length : 0;
+        const athletes = u.athletes || [];
+
+        // Generamos el HTML de los atletas para este padre
+        let athletesHtml = '';
+        if (athletes.length > 0) {
+            athletesHtml = `<div class="admin-user-athletes">
+                ${athletes.map((a, idx) => `
+                    <div class="mini-athlete-pill" onclick="openAdminAthleteFile('${id}', ${idx})">
+                        <i class="fas fa-id-card"></i> ${a.name} <small>(${a.activity || a.category})</small>
+                    </div>
+                `).join('')}
+            </div>`;
+        } else if (u.children && u.children.trim() !== "") {
+            athletesHtml = `<small style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> Pendiente migrar: ${u.children}</small>`;
+        } else {
+            athletesHtml = `<small style="color:var(--text-muted)">Sin atletas registrados</small>`;
+        }
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>
-                <b>${u.name}</b><br>
-                <small style="color:var(--text-muted)">${athletesCount} Atletas registrados</small>
+                <div class="user-main-info">
+                    <span class="user-name">${u.name}</span>
+                    <span class="user-id">@${u.username || u.id}</span>
+                </div>
             </td>
-            <td>${u.username || u.id}</td>
+            <td>
+                ${athletesHtml}
+            </td>
             <td><span class="badge ${u.role === 'admin' ? 'badge-approved' : 'badge-pending'}">${u.role.toUpperCase()}</span></td>
             <td>
-                <button class="btn-text btn-edit-user" data-id="${id}">Editar</button> 
-                <button class="btn-text btn-del-user" data-id="${id}" style="color:red">Borrar</button>
+                <div style="display:flex; gap:0.5rem">
+                    <button class="btn-action edit btn-edit-user" data-id="${id}" title="Editar cuenta y clave"><i class="fas fa-user-edit"></i></button> 
+                    <button class="btn-action reject btn-del-user" data-id="${id}" title="Eliminar usuario" style="color:var(--danger)"><i class="fas fa-trash-alt"></i></button>
+                </div>
             </td>`;
         tbody.appendChild(tr);
     });
+
+    // Eventos
     tbody.querySelectorAll('.btn-edit-user').forEach(btn => btn.addEventListener('click', () => {
         const user = users.find(u => (u.id || u.username) === btn.dataset.id);
         if (user) openEditUserModal(user);
     }));
+
     tbody.querySelectorAll('.btn-del-user').forEach(btn => btn.addEventListener('click', async () => {
-        if (confirm('¿Eliminar usuario?')) { await window.DataManager.deleteUser(btn.dataset.id); toast('Eliminado'); renderAdminUsers(); }
+        if (confirm('¿Eliminar usuario por completo? Esta acción no se puede deshacer.')) {
+            await window.DataManager.deleteUser(btn.dataset.id);
+            toast('Usuario eliminado');
+            renderAdminUsers();
+        }
     }));
+}
+
+/**
+ * Permite al Admin abrir la ficha de un atleta de un usuario específico
+ */
+async function openAdminAthleteFile(userId, athleteIndex) {
+    const users = await window.DataManager.getUsers();
+    const user = users.find(u => (u.id || u.username) === userId);
+    if (!user || !user.athletes[athleteIndex]) return;
+
+    const athlete = user.athletes[athleteIndex];
+    const config = await window.DataManager.getConfig();
+    const activities = config.activities || [];
+
+    // Llenamos el modal (reutilizamos el del usuario pero para el admin)
+    document.getElementById('ath-index').value = athleteIndex;
+    // Guardamos temporalmente el ID del usuario que estamos editando
+    document.getElementById('athlete-modal').dataset.editingUserId = userId;
+
+    const nameField = document.getElementById('ath-name');
+    nameField.value = athlete.name;
+    nameField.readOnly = false;
+
+    document.getElementById('ath-category').value = athlete.category || 'Mayores';
+    const actSelect = document.getElementById('ath-activity');
+    if (actSelect) {
+        actSelect.innerHTML = activities.map(a => `<option value="${a.name}">${a.name}</option>`).join('');
+        actSelect.value = athlete.activity || athlete.category;
+    }
+    document.getElementById('ath-dni').value = athlete.dni || '';
+    document.getElementById('ath-phone').value = athlete.phone || '';
+    document.getElementById('ath-email').value = athlete.email || '';
+    document.getElementById('ath-parents-names').value = athlete.parentsNames || '';
+    document.getElementById('ath-parents-phone').value = athlete.parentsPhone || '';
+    document.getElementById('ath-address').value = athlete.address || '';
+
+    document.getElementById('athlete-modal').classList.add('active');
 }
 
 function openEditUserModal(user) {
@@ -655,10 +726,14 @@ function setupEventListeners() {
         toast('Reporte exportado');
     });
 
-    // Guardar Ficha Atleta
+    // Guardar Ficha Atleta (Soporta Admin y Padre)
     document.getElementById('athlete-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const modal = document.getElementById('athlete-modal');
+        const editingUserId = modal.dataset.editingUserId;
+        const index = document.getElementById('ath-index').value;
         const name = document.getElementById('ath-name').value;
+
         const newAthlete = {
             name: name,
             dni: document.getElementById('ath-dni').value,
@@ -671,23 +746,32 @@ function setupEventListeners() {
             activity: document.getElementById('ath-activity').value
         };
 
-        if (!currentUser.athletes) currentUser.athletes = [];
-        const index = document.getElementById('ath-index').value;
+        let targetUser = currentUser;
 
-        if (index !== "-1") {
-            currentUser.athletes[index] = newAthlete;
-        } else {
-            currentUser.athletes.push(newAthlete);
+        // Si hay un editingUserId, significa que el Admin está editando a un usuario
+        if (editingUserId && currentUser.role === 'admin') {
+            const users = await window.DataManager.getUsers();
+            targetUser = users.find(u => (u.id || u.username) === editingUserId);
         }
 
-        // Sincronizar con el string de hijos para facturación
-        const updatedChildren = currentUser.athletes.map(a => `${a.name} (${a.activity})`).join(', ');
-        currentUser.children = updatedChildren;
+        if (!targetUser) return;
+        if (!targetUser.athletes) targetUser.athletes = [];
 
-        await window.DataManager.saveUser(currentUser.id, currentUser);
-        document.getElementById('athlete-modal').classList.remove('active');
+        if (index !== "-1") targetUser.athletes[index] = newAthlete;
+        else targetUser.athletes.push(newAthlete);
+
+        // Sincronizar con el string de hijos para facturación
+        targetUser.children = targetUser.athletes.map(a => `${a.name} (${a.activity})`).join(', ');
+
+        await window.DataManager.saveUser(targetUser.id || targetUser.username, targetUser);
+
+        modal.classList.remove('active');
+        delete modal.dataset.editingUserId; // Limpiamos
+
         toast('Ficha técnica y actividad actualizadas');
-        updateUI();
+
+        if (currentUser.role === 'admin') renderAdminUsers();
+        else updateUI();
     });
 
     // Recalcular monto al cambiar mes en pago

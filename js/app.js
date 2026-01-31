@@ -69,14 +69,14 @@ async function initApp() {
     if (currentUser) {
         // Refrescar datos del usuario desde la nube si es posible
         try {
-            const users = await window.DataManager.getUsers();
-            const fresh = users.find(u => (u.id || u.username) === currentUser.id);
+            // Usar el nuevo método getUser para obtener el usuario específico
+            const fresh = await window.DataManager.getUser(currentUser.id);
             if (fresh) {
                 currentUser = fresh;
                 localStorage.setItem('correcaminos_session', JSON.stringify(currentUser));
             }
         } catch (e) {
-            console.warn("No se pudo refrescar el usuario desde la nube, usando sesión local.");
+            console.warn("No se pudo refrescar el usuario desde la nube, usando sesión local.", e);
         }
 
         showView(currentUser.role === 'admin' ? 'admin-view' : 'user-view');
@@ -129,6 +129,15 @@ function getChildList(user) {
 async function updateUI() {
     if (!currentUser) return;
     try {
+        // Refrescar datos del usuario desde la nube si está conectado
+        if (window.DataManager.db && currentUser.id !== 'local_admin') {
+            const freshUser = await window.DataManager.getUser(currentUser.id);
+            if (freshUser) {
+                currentUser = freshUser;
+                localStorage.setItem('correcaminos_session', JSON.stringify(currentUser));
+            }
+        }
+
         const config = await window.DataManager.getConfig();
         const activities = config.activities || [
             { name: 'Atletismo Eq. Competitivo', price: 40000, social: true },

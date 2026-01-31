@@ -99,7 +99,6 @@ const DataManager = {
                 const q = window.firebase.firestore.collection(this.db, "users");
                 const snapshot = await window.firebase.firestore.getDocs(q);
                 const cloudUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                // Actualizamos cache local
                 localStorage.setItem('correcaminos_users', JSON.stringify(cloudUsers));
                 return cloudUsers;
             } catch (e) {
@@ -107,6 +106,18 @@ const DataManager = {
             }
         }
         return JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
+    },
+
+    async getUser(uid) {
+        if (this.db) {
+            try {
+                const docRef = window.firebase.firestore.doc(this.db, "users", uid);
+                const docSnap = await window.firebase.firestore.getDoc(docRef);
+                if (docSnap.exists) return { id: docSnap.id, ...docSnap.data() };
+            } catch (e) { console.error("Error getUser nube:", e); }
+        }
+        const users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
+        return users.find(u => u.id === uid);
     },
 
     async deleteUser(uid) {
@@ -133,6 +144,11 @@ const DataManager = {
             } catch (e) { }
         }
         return JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
+    },
+
+    async getPaymentsByUser(userId) {
+        const all = await this.getPayments();
+        return all.filter(p => p.userId === userId);
     },
 
     async addPayment(payment) {

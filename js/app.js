@@ -172,25 +172,32 @@ async function updateUI() {
                 return;
             }
 
-            // Lógica de Mora Corregida
+            // Lógica de Mora Corregida (Recargo a partir del día 13)
             const monthsNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
             const today = new Date();
             const currentMonthIndex = today.getMonth();
-            const dayOfMonth = today.getDate();
+
+            // Si es Enero (0), mostramos Febrero (1) por defecto para el cobro
+            const displayMonthIndex = currentMonthIndex === 0 ? 1 : currentMonthIndex;
+            const displayMonthName = monthsNames[displayMonthIndex];
+
             const lateFeeDay = config.lateFeeDay || 12;
             const lateFeeAmount = config.lateFeeAmount || 5000;
 
             const checkLate = (monthName) => {
                 const mIdxTarget = monthsNames.indexOf(monthName);
+                if (mIdxTarget === -1) return false;
+
+                // Si el día de hoy es menor o igual al día límite, NO hay mora
+                if (today.getMonth() === mIdxTarget && today.getDate() <= lateFeeDay) return false;
+
+                // Si ya pasó el mes, o estamos en el mismo mes después del día límite
                 let targetYear = today.getFullYear();
-                if (currentMonthIndex === 11 && mIdxTarget === 0) targetYear++;
-                if (currentMonthIndex === 0 && mIdxTarget === 11) targetYear--;
-                const deadline = new Date(targetYear, mIdxTarget, lateFeeDay);
+                const deadline = new Date(targetYear, mIdxTarget, lateFeeDay, 23, 59, 59);
                 return today > deadline;
             };
 
-            const currentMonthName = monthsNames[currentMonthIndex];
-            const lateStatus = checkLate(currentMonthName);
+            const lateStatus = checkLate(displayMonthName);
 
             let totalActivitiesCost = 0;
             let totalLateFees = 0;
@@ -246,7 +253,12 @@ async function updateUI() {
             if (breakdownContainer) {
                 breakdownContainer.innerHTML = `
                     <div class="card" style="margin-top: 2rem;">
-                        <div class="card-header"><h3>Desglose Detallado por Hijo</h3></div>
+                        <div class="card-header">
+                            <div>
+                                <h3>Desglose Detallado - Cuota ${displayMonthName}</h3>
+                                <p class="text-xs">Valores vigentes para el periodo seleccionado.</p>
+                            </div>
+                        </div>
                         <div class="card-body">
                             <table class="children-fees">${tableRowsHtml}
                                 <tr style="border-top: 2px solid #ddd">
@@ -1035,25 +1047,35 @@ async function renderUserDashboard() {
 
     // Control Panel Panel Summary
     const now = new Date();
-    const currentMonthName = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][now.getMonth()];
+    const allMonths = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+    // Si es Enero, el sistema apunta a Febrero
+    let currentMonthIndex = now.getMonth();
+    if (currentMonthIndex === 0) currentMonthIndex = 1;
+    const currentMonthName = allMonths[currentMonthIndex];
 
     const currentMonthPayment = payments.find(p => p.month === currentMonthName);
     const lastRejected = payments.filter(p => p.status === 'rejected').sort((a, b) => b.timestamp - a.timestamp)[0];
 
     const statusCard = document.querySelector('.stat-card.highlight');
+    const statusIcon = statusCard.querySelector('.stat-icon i');
     if (statusCard) {
         if (lastRejected) {
-            statusCard.style.background = 'linear-gradient(135deg, var(--danger) 0%, #9b2c2c 100%)';
-            document.getElementById('user-cc-status').innerText = 'Pago Rechazado';
+            statusCard.style.background = 'linear-gradient(135deg, #e53e3e 0%, #9b2c2c 100%)';
+            document.getElementById('user-cc-status').innerText = 'Revisar Pago';
+            if (statusIcon) statusIcon.className = 'fas fa-exclamation-triangle';
         } else if (currentMonthPayment?.status === 'pending') {
-            statusCard.style.background = 'linear-gradient(135deg, var(--warning) 0%, #b7791f 100%)';
+            statusCard.style.background = 'linear-gradient(135deg, #ecc94b 0%, #b7791f 100%)';
             document.getElementById('user-cc-status').innerText = 'En Revisión';
+            if (statusIcon) statusIcon.className = 'fas fa-hourglass-half';
         } else if (currentMonthPayment?.status === 'approved') {
-            statusCard.style.background = 'linear-gradient(135deg, var(--success) 0%, #22543d 100%)';
+            statusCard.style.background = 'linear-gradient(135deg, #38a169 0%, #22543d 100%)';
             document.getElementById('user-cc-status').innerText = 'Al Día';
+            if (statusIcon) statusIcon.className = 'fas fa-check-double';
         } else {
-            statusCard.style.background = 'linear-gradient(135deg, var(--primary) 0%, #2a4365 100%)';
+            statusCard.style.background = 'linear-gradient(135deg, #2c5282 0%, #1a365d 100%)';
             document.getElementById('user-cc-status').innerText = 'Pendiente ' + currentMonthName;
+            if (statusIcon) statusIcon.className = 'fas fa-calendar-day';
         }
     }
 
@@ -1071,27 +1093,36 @@ async function renderUserDashboard() {
         breakdownContainer.insertAdjacentHTML('afterbegin', alertHtml);
     }
 
-    // Línea de Tiempo Simplificada (Control Panel Style)
+    // Línea de Tiempo Dinámica (Horizontal & Interactiva)
     const months = ["Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
     const timelineContainer = document.getElementById('user-yearly-timeline');
     if (timelineContainer) {
         timelineContainer.innerHTML = '';
         months.forEach(m => {
-            const paidMonth = payments.filter(p => p.month === m && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0);
-            const isPaid = paidMonth >= monthlyExpected && monthlyExpected > 0;
-            const isCurrent = m === currentMonthName;
+            const hasPayment = payments.some(p => p.month === m && p.status === 'approved');
             const isPending = payments.some(p => p.month === m && p.status === 'pending');
             const isRejected = payments.some(p => p.month === m && p.status === 'rejected');
+            const isCurrent = m === currentMonthName;
+
+            const state = hasPayment ? 'paid' : (isRejected ? 'rejected' : (isPending ? 'pending' : 'idle'));
 
             const div = document.createElement('div');
-            div.className = `timeline-month ${isPaid ? 'paid' : (isRejected ? 'rejected' : (isPending ? 'pending' : ''))} ${isCurrent ? 'current' : ''}`;
+            div.className = `timeline-item ${state} ${isCurrent ? 'active' : ''}`;
             div.innerHTML = `
-                <span class="tm-name">${m.substring(0, 3)}</span>
-                <span class="tm-icon"><i class="fas ${isPaid ? 'fa-check-circle' : (isRejected ? 'fa-times-circle' : (isPending ? 'fa-clock' : 'fa-circle'))}"></i></span>
-                <span class="text-xs" style="margin-top:0.5rem">${monthlyExpected > 0 ? (isPaid ? 'Pago' : (isRejected ? 'Rechaz.' : (isPending ? 'Revisión' : 'Deuda'))) : '---'}</span>
+                <div class="tm-dot"></div>
+                <div class="tm-content">
+                    <span class="tm-month">${m.substring(0, 3)}</span>
+                    <span class="tm-status">${state === 'paid' ? 'Pagado' : (state === 'rejected' ? 'Rechazado' : (state === 'pending' ? 'En revisión' : 'Pendiente'))}</span>
+                </div>
             `;
             timelineContainer.appendChild(div);
         });
+
+        // Auto-scroll al mes actual
+        setTimeout(() => {
+            const active = timelineContainer.querySelector('.active');
+            if (active) active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }, 300);
     }
 
     // Tabla de historial

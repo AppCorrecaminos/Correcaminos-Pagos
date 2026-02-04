@@ -535,6 +535,8 @@ td {
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(4px);
+    padding: 1rem;
+    overflow-y: auto;
 }
 
 .modal.active {
@@ -558,9 +560,17 @@ td {
     background: var(--bg-card);
     width: 100%;
     max-width: 500px;
+    max-height: 95vh;
+    overflow-y: auto;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
     padding: 2rem;
+    position: relative;
+    scroll-behavior: smooth;
+}
+
+.modal-content.modal-lg {
+    max-width: 700px;
 }
 
 .modal-header {

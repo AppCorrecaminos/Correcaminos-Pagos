@@ -325,7 +325,7 @@ function renderAthletes(children, activities) {
     } else {
         children.forEach((kid, index) => {
             const data = athletesData.find(a => a.name.trim().toLowerCase() === kid.name.trim().toLowerCase()) || {};
-            const isComplete = data.dni && data.address && data.parentsPhone;
+            const isComplete = data.dni && data.address && data.parentsPhone && data.medicalCert && data.rulesAccepted;
 
             const card = document.createElement('div');
             card.className = `athlete-card ${isComplete ? '' : 'incomplete'}`;
@@ -337,7 +337,15 @@ function renderAthletes(children, activities) {
                 <div class="athlete-card-body">
                     <p><strong>Categoría:</strong> ${data.category || kid.category}</p>
                     <p><strong>DNI:</strong> ${data.dni || '---'}</p>
-                    <p><strong>Teléfono:</strong> ${data.phone || '---'}</p>
+                    <p><strong>F. Nac:</strong> ${data.birthdate || '---'}</p>
+                    <div style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.3rem;">
+                        <span class="badge ${data.medicalCert ? 'badge-approved' : 'badge-pending'}" style="font-size: 0.7rem;">
+                            <i class="fas ${data.medicalCert ? 'fa-check-circle' : 'fa-times-circle'}"></i> Cert. Médico
+                        </span>
+                        <span class="badge ${data.rulesAccepted ? 'badge-approved' : 'badge-pending'}" style="font-size: 0.7rem;">
+                            <i class="fas ${data.rulesAccepted ? 'fa-check-circle' : 'fa-times-circle'}"></i> Reglamento
+                        </span>
+                    </div>
                 </div>
                 <button class="btn-text btn-edit-athlete" data-index="${index}" style="margin-top: 1rem; width: 100%; border: 1px solid #eee; padding: 0.5rem; border-radius: 4px;">
                     <i class="fas fa-edit"></i> Completar Ficha Técnica
@@ -365,11 +373,33 @@ function renderAthletes(children, activities) {
                     actSelect.value = data.activity || kid.category;
                 }
                 document.getElementById('ath-dni').value = data.dni || '';
+                document.getElementById('ath-birthdate').value = data.birthdate || '';
                 document.getElementById('ath-phone').value = data.phone || '';
                 document.getElementById('ath-email').value = data.email || '';
                 document.getElementById('ath-parents-names').value = data.parentsNames || '';
                 document.getElementById('ath-parents-phone').value = data.parentsPhone || '';
                 document.getElementById('ath-address').value = data.address || '';
+                document.getElementById('ath-rules-accepted').checked = data.rulesAccepted || false;
+
+                // Reset medical cert status in modal
+                const certStatus = document.getElementById('medical-cert-status');
+                const certName = document.getElementById('medical-cert-name');
+                if (data.medicalCert) {
+                    certStatus.style.display = 'block';
+                    certName.innerText = "Certificado cargado (Toca para cambiar)";
+                    document.getElementById('athlete-modal').dataset.tempCert = data.medicalCert;
+                    const viewLink = document.getElementById('view-medical-cert');
+                    if (viewLink) {
+                        viewLink.href = data.medicalCert;
+                        viewLink.style.display = 'inline';
+                    }
+                } else {
+                    certStatus.style.display = 'none';
+                    certName.innerText = "Toca para adjuntar certificado";
+                    delete document.getElementById('athlete-modal').dataset.tempCert;
+                    const viewLink = document.getElementById('view-medical-cert');
+                    if (viewLink) viewLink.style.display = 'none';
+                }
 
                 document.getElementById('athlete-modal').classList.add('active');
             });
@@ -469,11 +499,33 @@ async function openAdminAthleteFile(userId, athleteIndex) {
         actSelect.value = athlete.activity || athlete.category;
     }
     document.getElementById('ath-dni').value = athlete.dni || '';
+    document.getElementById('ath-birthdate').value = athlete.birthdate || '';
     document.getElementById('ath-phone').value = athlete.phone || '';
     document.getElementById('ath-email').value = athlete.email || '';
     document.getElementById('ath-parents-names').value = athlete.parentsNames || '';
     document.getElementById('ath-parents-phone').value = athlete.parentsPhone || '';
     document.getElementById('ath-address').value = athlete.address || '';
+    document.getElementById('ath-rules-accepted').checked = athlete.rulesAccepted || false;
+
+    // Reset medical cert status in modal
+    const certStatus = document.getElementById('medical-cert-status');
+    const certName = document.getElementById('medical-cert-name');
+    if (athlete.medicalCert) {
+        certStatus.style.display = 'block';
+        certName.innerText = "Certificado cargado (Toca para cambiar)";
+        document.getElementById('athlete-modal').dataset.tempCert = athlete.medicalCert;
+        const viewLink = document.getElementById('view-medical-cert');
+        if (viewLink) {
+            viewLink.href = athlete.medicalCert;
+            viewLink.style.display = 'inline';
+        }
+    } else {
+        certStatus.style.display = 'none';
+        certName.innerText = "No hay certificado cargado";
+        delete document.getElementById('athlete-modal').dataset.tempCert;
+        const viewLink = document.getElementById('view-medical-cert');
+        if (viewLink) viewLink.style.display = 'none';
+    }
 
     document.getElementById('athlete-modal').classList.add('active');
 }
@@ -685,6 +737,24 @@ function setupEventListeners() {
         if (e.target.files[0]) document.getElementById('file-name').innerText = e.target.files[0].name;
     });
 
+    // Certificado Médico
+    document.getElementById('medical-cert-upload-zone')?.addEventListener('click', () => document.getElementById('ath-medical-cert').click());
+    document.getElementById('ath-medical-cert')?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const base64 = await window.DataManager.fileToBase64(file);
+            document.getElementById('athlete-modal').dataset.tempCert = base64;
+            document.getElementById('medical-cert-name').innerText = file.name;
+            document.getElementById('medical-cert-status').style.display = 'block';
+            document.getElementById('medical-cert-badge').innerHTML = '<i class="fas fa-check"></i> Certificado listo para guardar';
+            const viewLink = document.getElementById('view-medical-cert');
+            if (viewLink) {
+                viewLink.href = base64;
+                viewLink.style.display = 'inline';
+            }
+        }
+    });
+
     // Confirmación de Aprobación Manual
     document.getElementById('btn-confirm-approve')?.addEventListener('click', async () => {
         if (!activePaymentForApproval) return;
@@ -758,13 +828,16 @@ function setupEventListeners() {
         const newAthlete = {
             name: name,
             dni: document.getElementById('ath-dni').value,
+            birthdate: document.getElementById('ath-birthdate').value,
             phone: document.getElementById('ath-phone').value,
             email: document.getElementById('ath-email').value,
             parentsNames: document.getElementById('ath-parents-names').value,
             parentsPhone: document.getElementById('ath-parents-phone').value,
             address: document.getElementById('ath-address').value,
             category: document.getElementById('ath-category').value,
-            activity: document.getElementById('ath-activity').value
+            activity: document.getElementById('ath-activity').value,
+            rulesAccepted: document.getElementById('ath-rules-accepted').checked,
+            medicalCert: modal.dataset.tempCert || null
         };
 
         let targetUser = currentUser;
@@ -852,17 +925,17 @@ function setupEventListeners() {
     // Exportar Atletas
     document.getElementById('btn-export-athletes')?.addEventListener('click', async () => {
         const users = await window.DataManager.getUsers();
-        let csv = 'Padre/Madre,Atleta,DNI,Categoria,Actividad,Telefono Atleta,Email,Padres,Tel Padres,Direccion\n';
+        let csv = 'Padre/Madre,Atleta,DNI,F.Nac,Categoria,Actividad,Telefono Atleta,Email,Padres,Tel Padres,Direccion,Reglamento,Cert Medico\n';
 
         users.forEach(u => {
             if (u.athletes && u.athletes.length > 0) {
                 u.athletes.forEach(a => {
-                    csv += `"${u.name}","${a.name}","${a.dni || ''}","${a.category || ''}","${a.activity || ''}","${a.phone || ''}","${a.email || ''}","${a.parentsNames || ''}","${a.parentsPhone || ''}","${a.address || ''}"\n`;
+                    csv += `"${u.name}","${a.name}","${a.dni || ''}","${a.birthdate || ''}","${a.category || ''}","${a.activity || ''}","${a.phone || ''}","${a.email || ''}","${a.parentsNames || ''}","${a.parentsPhone || ''}","${a.address || ''}","${a.rulesAccepted ? 'SI' : 'NO'}","${a.medicalCert ? 'SI' : 'NO'}"\n`;
                 });
             } else if (u.children && u.role !== 'admin') {
                 const kids = parseChildren(u.children);
                 kids.forEach(k => {
-                    csv += `"${u.name}","${k.name}","","${k.category}","","","","","",""\n`;
+                    csv += `"${u.name}","${k.name}","","","${k.category}","","","","","","","NO","NO"\n`;
                 });
             }
         });
@@ -930,12 +1003,37 @@ function setupEventListeners() {
             actSelect.innerHTML = activities.map(a => `<option value="${a.name}">${a.name}</option>`).join('');
         }
 
-        ['ath-dni', 'ath-phone', 'ath-email', 'ath-parents-names', 'ath-parents-phone', 'ath-address'].forEach(id => {
+        ['ath-dni', 'ath-birthdate', 'ath-phone', 'ath-email', 'ath-parents-names', 'ath-parents-phone', 'ath-address'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
+        document.getElementById('ath-rules-accepted').checked = false;
+        document.getElementById('medical-cert-status').style.display = 'none';
+        document.getElementById('medical-cert-name').innerText = "Toca para adjuntar certificado";
+        delete document.getElementById('athlete-modal').dataset.tempCert;
 
         document.getElementById('athlete-modal').classList.add('active');
+    });
+
+    // Cerrar modal al hacer clic fuera del contenido
+    document.querySelectorAll('.modal').forEach(m => {
+        m.addEventListener('click', (e) => {
+            if (e.target === m) {
+                m.classList.remove('active');
+                if (m.id === 'athlete-modal') delete m.dataset.editingUserId;
+            }
+        });
+    });
+
+    // Cerrar modal con tecla Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const activeModal = document.querySelector('.modal.active');
+            if (activeModal) {
+                activeModal.classList.remove('active');
+                if (activeModal.id === 'athlete-modal') delete activeModal.dataset.editingUserId;
+            }
+        }
     });
 }
 

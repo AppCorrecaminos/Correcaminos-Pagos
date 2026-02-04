@@ -672,7 +672,7 @@
 
         <!-- Modal para Ficha del Atleta -->
         <div id="athlete-modal" class="modal">
-            <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-content modal-lg">
                 <div class="modal-header">
                     <h3>Datos del Atleta</h3>
                     <button class="close-modal">&times;</button>
@@ -691,6 +691,10 @@
                     </div>
                     <div class="form-grid-2">
                         <div class="form-group">
+                            <label for="ath-birthdate">Fecha de Nacimiento</label>
+                            <input type="date" id="ath-birthdate" required>
+                        </div>
+                        <div class="form-group">
                             <label for="ath-category">Categoría</label>
                             <select id="ath-category" required>
                                 <option value="Infantil">Infantil</option>
@@ -703,12 +707,18 @@
                             </select>
                             <small>Para cambiar categoría contacte al administrador.</small>
                         </div>
+                    </div>
+                    <div class="form-grid-2">
                         <div class="form-group">
                             <label for="ath-activity">Actividad / Categoría de Cobro</label>
                             <select id="ath-activity" required>
                                 <!-- Activities will be loaded here -->
                             </select>
                             <small>Esta actividad determina el costo de la cuota mensual.</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="ath-email">Correo Electrónico de Contacto</label>
+                            <input type="email" id="ath-email" required>
                         </div>
                     </div>
                     <div class="form-grid-2">
@@ -717,27 +727,58 @@
                             <input type="tel" id="ath-phone" placeholder="Ej: 2944xxxxxx">
                         </div>
                         <div class="form-group">
-                            <label for="ath-email">Correo Electrónico de Contacto</label>
-                            <input type="email" id="ath-email" required>
+                            <label for="ath-address">Dirección Particular</label>
+                            <input type="text" id="ath-address" placeholder="Calle, Número, Barrio" required>
                         </div>
                     </div>
                     <div class="card" style="padding: 1rem; background: #f8fafc; margin-bottom: 1.5rem;">
                         <h4 style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--primary);">Datos de los Padres /
                             Tutores</h4>
-                        <div class="form-group">
-                            <label for="ath-parents-names">Nombres de los Padres</label>
-                            <input type="text" id="ath-parents-names" placeholder="Ej: Juan Perez y Maria Sosa"
-                                required>
-                        </div>
-                        <div class="form-group">
-                            <label for="ath-parents-phone">Teléfono de Contacto (Padres)</label>
-                            <input type="tel" id="ath-parents-phone" placeholder="Emergencias" required>
+                        <div class="form-grid-2">
+                            <div class="form-group">
+                                <label for="ath-parents-names">Nombres de los Padres</label>
+                                <input type="text" id="ath-parents-names" placeholder="Ej: Juan Perez y Maria Sosa"
+                                    required>
+                            </div>
+                            <div class="form-group">
+                                <label for="ath-parents-phone">Teléfono de Contacto (Padres)</label>
+                                <input type="tel" id="ath-parents-phone" placeholder="Emergencias" required>
+                            </div>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label for="ath-address">Dirección Particular</label>
-                        <input type="text" id="ath-address" placeholder="Calle, Número, Barrio" required>
+
+                    <div class="card"
+                        style="padding: 1rem; background: #fff5f5; border: 1px solid #fed7d7; margin-bottom: 1.5rem;">
+                        <h4 style="margin-bottom: 1rem; font-size: 0.9rem; color: #c53030;">Documentación Obligatoria
+                        </h4>
+                        <div class="form-group">
+                            <label for="ath-medical-cert">Certificado Médico (Imagen o PDF)</label>
+                            <div class="file-upload" id="medical-cert-upload-zone"
+                                style="background: white; border: 1px dashed #cbd5e0; padding: 1rem; text-align: center; cursor: pointer; border-radius: 8px;">
+                                <i class="fas fa-file-medical"
+                                    style="font-size: 1.5rem; color: #e53e3e; margin-bottom: 0.5rem;"></i>
+                                <p id="medical-cert-name">Toca para adjuntar certificado</p>
+                                <input type="file" id="ath-medical-cert" accept="image/*,application/pdf" hidden>
+                            </div>
+                            <div id="medical-cert-status" style="margin-top: 0.5rem; display: none;">
+                                <span class="badge badge-approved" id="medical-cert-badge"><i class="fas fa-check"></i>
+                                    Certificado Cargado</span>
+                                <a id="view-medical-cert" href="#" target="_blank"
+                                    style="margin-left: 0.5rem; font-size: 0.8rem; color: var(--primary); text-decoration: underline;">Ver
+                                    actual</a>
+                            </div>
+                        </div>
+                        <div class="form-group"
+                            style="margin-top: 1rem; display: flex; align-items: flex-start; gap: 0.5rem;">
+                            <input type="checkbox" id="ath-rules-accepted" style="margin-top: 0.3rem;" required>
+                            <label for="ath-rules-accepted" style="font-size: 0.85rem; line-height: 1.4;">
+                                He leído y acepto el <a href="Reglamento de Pautas y Convivencia.docx" target="_blank"
+                                    style="color: var(--primary); text-decoration: underline;">Reglamento de Pautas y
+                                    Convivencia</a> de la institución.
+                            </label>
+                        </div>
                     </div>
+
                     <div class="modal-actions">
                         <button type="button" class="btn-text close-modal">Cerrar sin guardar</button>
                         <button type="submit" class="btn-primary">Guardar Ficha Técnica</button>

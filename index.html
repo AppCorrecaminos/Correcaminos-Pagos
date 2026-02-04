@@ -13,6 +13,63 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- CSS -->
     <link rel="stylesheet" href="css/styles.css">
+    <style>
+        /* Activity Picker Styles */
+        .activity-picker-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 0.5rem;
+            background: #f8fafc;
+            min-height: 45px;
+        }
+
+        .activity-picker-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .activity-picker-item span {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--primary);
+        }
+
+        .btn-remove-activity {
+            color: var(--danger);
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0.2rem;
+            transition: 0.2s;
+        }
+
+        .btn-remove-activity:hover {
+            color: #c53030;
+            transform: scale(1.1);
+        }
+
+        .toggle-password {
+            cursor: pointer;
+            transition: color 0.2s;
+            z-index: 10;
+        }
+
+        .toggle-password:hover {
+            color: var(--primary) !important;
+        }
+    </style>
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
@@ -79,6 +136,8 @@
                             <div class="input-icon">
                                 <i class="fas fa-lock"></i>
                                 <input type="password" id="password" placeholder="••••••••" required>
+                                <i class="fas fa-eye toggle-password" data-target="password"
+                                    style="position: absolute; right: 1rem; cursor: pointer; color: var(--text-muted);"></i>
                             </div>
                         </div>
                         <button type="submit" class="btn-primary">Iniciar Sesión</button>
@@ -537,14 +596,30 @@
                         <input type="text" id="reg-email" placeholder="ej: patricio" required>
                     </div>
                     <div class="form-group">
-                        <label for="reg-children">Nombres y Categorías</label>
-                        <textarea id="reg-children" placeholder="Ej: Juan (Infantil), Maria (Juvenil)" rows="2"
-                            required></textarea>
-                        <small>Usa el formato: Nombre (Categoría)</small>
+                        <label>Actividades / Atletas</label>
+                        <div id="reg-activities-list" class="activity-picker-list" style="margin-bottom: 0.5rem;">
+                            <!-- Selected activities will appear here -->
+                        </div>
+                        <div class="activity-add-row"
+                            style="display: flex; gap: 0.5rem; background: #f1f5f9; padding: 0.5rem; border-radius: 8px;">
+                            <input type="text" id="reg-ath-name-input" placeholder="Nombre Atleta" class="form-control"
+                                style="flex: 2; background: white;">
+                            <select id="reg-activity-picker" class="form-control" style="flex: 2; background: white;">
+                                <option value="">Actividad...</option>
+                            </select>
+                            <button type="button" id="btn-reg-add-activity" class="btn-primary"
+                                style="padding: 0.5rem 1rem;"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <small>Ingresa el nombre del atleta y selecciona su actividad.</small>
                     </div>
                     <div class="form-group">
                         <label for="reg-pass">Contraseña Inicial</label>
-                        <input type="password" id="reg-pass" value="correcaminos123" required>
+                        <div style="position: relative; display: flex; align-items: center;">
+                            <input type="password" id="reg-pass" value="correcaminos123" required
+                                style="width: 100%; padding-right: 2.5rem;">
+                            <i class="fas fa-eye toggle-password" data-target="reg-pass"
+                                style="position: absolute; right: 1rem; cursor: pointer; color: var(--text-muted);"></i>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="reg-role">Rol</label>
@@ -575,13 +650,35 @@
                         <input type="text" id="edit-u-name" required>
                     </div>
                     <div class="form-group">
-                        <label for="edit-u-children">Hijos y Categorías</label>
-                        <textarea id="edit-u-children" rows="2" required></textarea>
-                        <small>Ej: Juan (Infantil), Maria (Juvenil)</small>
+                        <label for="edit-u-username">Usuario (sin @)</label>
+                        <input type="text" id="edit-u-username" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Actividades / Atletas</label>
+                        <div id="edit-u-activities-list" class="activity-picker-list" style="margin-bottom: 0.5rem;">
+                            <!-- Selected activities will appear here -->
+                        </div>
+                        <div class="activity-add-row"
+                            style="display: flex; gap: 0.5rem; background: #f1f5f9; padding: 0.5rem; border-radius: 8px;">
+                            <input type="text" id="edit-u-ath-name-input" placeholder="Nombre Atleta"
+                                class="form-control" style="flex: 2; background: white;">
+                            <select id="edit-u-activity-picker" class="form-control"
+                                style="flex: 2; background: white;">
+                                <option value="">Actividad...</option>
+                            </select>
+                            <button type="button" id="btn-edit-u-add-activity" class="btn-primary"
+                                style="padding: 0.5rem 1rem;"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <small>Puedes añadir más atletas o quitarlos de la lista.</small>
                     </div>
                     <div class="form-group">
                         <label for="edit-u-pass">Contraseña</label>
-                        <input type="password" id="edit-u-pass" required>
+                        <div style="position: relative; display: flex; align-items: center;">
+                            <input type="password" id="edit-u-pass" required
+                                style="width: 100%; padding-right: 2.5rem;">
+                            <i class="fas fa-eye toggle-password" data-target="edit-u-pass"
+                                style="position: absolute; right: 1rem; cursor: pointer; color: var(--text-muted);"></i>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label for="edit-u-role">Rol</label>

@@ -116,6 +116,70 @@ function parseChildren(childrenStr) {
     });
 }
 
+function setupActivityPicker(containerId, pickerId, nameInputId, addBtnId, childrenStr = "") {
+    const container = document.getElementById(containerId);
+    const picker = document.getElementById(pickerId);
+    const nameInput = document.getElementById(nameInputId);
+    const addBtn = document.getElementById(addBtnId);
+    if (!container || !picker) return;
+
+    container.innerHTML = "";
+
+    // Parse existing children
+    const kids = parseChildren(childrenStr);
+    kids.forEach((k) => {
+        addActivityRow(container, k.category, k.name);
+    });
+
+    // Populate picker options
+    window.DataManager.getConfig().then(config => {
+        picker.innerHTML = '<option value="">Actividad...</option>' +
+            config.activities.map(a => `<option value="${a.name}">${a.name}</option>`).join('');
+    });
+
+    // Reset old listeners
+    picker.onchange = null;
+
+    // Button listener
+    if (addBtn) {
+        addBtn.onclick = () => {
+            const activity = picker.value;
+            const name = nameInput ? nameInput.value.trim() : "";
+            if (!activity) {
+                toast("Selecciona una actividad", "error");
+                return;
+            }
+            addActivityRow(container, activity, name || `Atleta ${container.children.length + 1}`);
+            if (nameInput) nameInput.value = "";
+            picker.value = "";
+        };
+    }
+}
+
+function addActivityRow(container, activity, name = "") {
+    const item = document.createElement('div');
+    item.className = 'activity-picker-item';
+    item.dataset.activity = activity;
+    item.innerHTML = `
+        <span>${name} (${activity})</span>
+        <button type="button" class="btn-remove-activity" title="Eliminar">
+            <i class="fas fa-trash-alt"></i>
+        </button>
+    `;
+    item.querySelector('.btn-remove-activity').onclick = () => item.remove();
+    container.appendChild(item);
+}
+
+function getActivitiesFromList(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return "";
+    const rows = container.querySelectorAll('.activity-picker-item');
+    return Array.from(rows).map((row) => {
+        const span = row.querySelector('span');
+        return span ? span.innerText : "";
+    }).join(', ');
+}
+
 function getChildList(user) {
     if (user.athletes && user.athletes.length > 0) {
         return user.athletes.map(a => ({
@@ -533,7 +597,8 @@ async function openAdminAthleteFile(userId, athleteIndex) {
 function openEditUserModal(user) {
     document.getElementById('edit-u-id').value = user.id || user.username;
     document.getElementById('edit-u-name').value = user.name || '';
-    document.getElementById('edit-u-children').value = user.children || '';
+    document.getElementById('edit-u-username').value = user.username || '';
+    setupActivityPicker('edit-u-activities-list', 'edit-u-activity-picker', 'edit-u-ath-name-input', 'btn-edit-u-add-activity', user.children || '');
     document.getElementById('edit-u-pass').value = user.password || '';
     document.getElementById('edit-u-role').value = user.role || 'user';
     document.getElementById('edit-user-modal').classList.add('active');
@@ -602,7 +667,7 @@ function setupEventListeners() {
         await window.DataManager.saveUser(userId, {
             name: document.getElementById('reg-name').value,
             username: username,
-            children: document.getElementById('reg-children').value,
+            children: getActivitiesFromList('reg-activities-list'),
             password: document.getElementById('reg-pass').value,
             role: document.getElementById('reg-role').value
         });
@@ -615,7 +680,8 @@ function setupEventListeners() {
         const id = document.getElementById('edit-u-id').value;
         await window.DataManager.saveUser(id, {
             name: document.getElementById('edit-u-name').value,
-            children: document.getElementById('edit-u-children').value,
+            username: document.getElementById('edit-u-username').value.toLowerCase().trim(),
+            children: getActivitiesFromList('edit-u-activities-list'),
             password: document.getElementById('edit-u-pass').value,
             role: document.getElementById('edit-u-role').value
         });
@@ -624,6 +690,7 @@ function setupEventListeners() {
     });
 
     document.getElementById('btn-add-user')?.addEventListener('click', () => {
+        setupActivityPicker('reg-activities-list', 'reg-activity-picker', 'reg-ath-name-input', 'btn-reg-add-activity', "");
         document.getElementById('user-modal').classList.add('active');
     });
 
@@ -1023,6 +1090,20 @@ function setupEventListeners() {
                 if (m.id === 'athlete-modal') delete m.dataset.editingUserId;
             }
         });
+    });
+
+    // Toggle visibilidad de contraseña
+    document.querySelectorAll('.toggle-password').forEach(btn => {
+        btn.onclick = () => {
+            const input = document.getElementById(btn.dataset.target);
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                input.type = 'password';
+                btn.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        };
     });
 
     // Cerrar modal con tecla Escape

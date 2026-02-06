@@ -766,9 +766,16 @@ function setupEventListeners() {
     document.getElementById('payment-report-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = e.target.querySelector('button[type="submit"]');
+        const method = document.getElementById('payment-method').value;
+        const file = document.getElementById('payment-receipt').files[0];
+
+        if (method === 'Transferencia' && !file) {
+            alert("Por favor selecciona una foto del comprobante para transferencias.");
+            return;
+        }
+
         btn.disabled = true;
         try {
-            const file = document.getElementById('payment-receipt').files[0];
             const receipt = file ? await window.DataManager.fileToBase64(file) : null;
             await window.DataManager.addPayment({
                 userId: currentUser.id,
@@ -776,6 +783,7 @@ function setupEventListeners() {
                 childrenNames: currentUser.children || 'Hijos',
                 month: document.getElementById('payment-month').value,
                 amount: parseInt(document.getElementById('payment-amount').value),
+                paymentMethod: method,
                 status: 'pending', receiptURL: receipt
             });
             document.getElementById('payment-modal').classList.remove('active');
@@ -799,9 +807,32 @@ function setupEventListeners() {
     document.querySelectorAll('.btn-logout').forEach(b => b.addEventListener('click', () => window.Auth.logout()));
 
     // Foto recibo
-    document.getElementById('file-upload-zone')?.addEventListener('click', () => document.getElementById('payment-receipt').click());
+    document.getElementById('file-upload-zone')?.addEventListener('click', () => {
+        if (document.getElementById('payment-method').value === 'Efectivo') {
+            toast('No es necesario subir comprobante para pagos en efectivo', 'info');
+            return;
+        }
+        document.getElementById('payment-receipt').click();
+    });
     document.getElementById('payment-receipt')?.addEventListener('change', (e) => {
         if (e.target.files[0]) document.getElementById('file-name').innerText = e.target.files[0].name;
+    });
+
+    document.getElementById('payment-method')?.addEventListener('change', (e) => {
+        const uploadZone = document.getElementById('file-upload-zone');
+        const fileName = document.getElementById('file-name');
+        if (e.target.value === 'Efectivo') {
+            uploadZone.style.opacity = '0.5';
+            uploadZone.style.pointerEvents = 'none';
+            uploadZone.style.background = '#f1f5f9';
+            fileName.innerText = "No requerido para efectivo";
+            document.getElementById('payment-receipt').value = ""; // Clear file
+        } else {
+            uploadZone.style.opacity = '1';
+            uploadZone.style.pointerEvents = 'auto';
+            uploadZone.style.background = '';
+            fileName.innerText = "";
+        }
     });
 
     // Certificado Médico
@@ -1153,6 +1184,7 @@ async function renderAdminDashboard(manualPayments = null) {
             <td><b>${p.userName}</b><br><small>${p.childrenNames || ''}</small></td>
             <td>${p.month}</td>
             <td>$ ${(p.amount || 0).toLocaleString('es-AR')}</td>
+            <td><span class="badge ${p.paymentMethod === 'Efectivo' ? 'badge-pending' : 'badge-approved'}" style="background: ${p.paymentMethod === 'Efectivo' ? '#94a3b8' : '#3b82f6'}">${p.paymentMethod || 'Transf.'}</span></td>
             <td>${p.receiptURL ? `<button class="btn-text btn-view-admin-photo" data-id="${p.id}"><i class="fas fa-image"></i> Ver Foto</button>` : '---'}</td>
             <td><span class="badge badge-${p.status}">${statusMap[p.status]}</span></td>
             <td>
@@ -1191,6 +1223,7 @@ function openApproveModal(payment) {
     activePaymentForApproval = payment;
     document.getElementById('approve-user-name').innerText = payment.userName;
     document.getElementById('approve-month').innerText = payment.month;
+    document.getElementById('approve-method').innerText = payment.paymentMethod || 'Transferencia';
     document.getElementById('approve-amount-reported').innerText = `$ ${(payment.amount || 0).toLocaleString('es-AR')}`;
     document.getElementById('confirm-amount').value = payment.amount || 0;
 

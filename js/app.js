@@ -760,6 +760,54 @@ function setupEventListeners() {
         }
     });
 
+    document.getElementById('btn-fix-payment-data')?.addEventListener('click', async () => {
+        if (!confirm("Esta herramienta actualizará todos los pagos antiguos en la base de datos para separar Cuota Social de Actividades basado en la configuración actual. ¿Continuar?")) return;
+
+        const btn = document.getElementById('btn-fix-payment-data');
+        btn.disabled = true;
+        btn.innerText = "Procesando...";
+
+        try {
+            const payments = await window.DataManager.getPayments();
+            const config = await window.DataManager.getConfig();
+            const activities = config.activities || [];
+            const socialFee = config.socialFee || 5000;
+            let count = 0;
+
+            for (let p of payments) {
+                if (p.socialFeeAmount === undefined || p.socialFeeAmount === null) {
+                    const kids = parseChildren(p.childrenNames || '');
+                    const hasSocial = kids.some(k => {
+                        const actName = (k.category || '').toLowerCase();
+                        const actMatch = activities.find(a =>
+                            a.name.toLowerCase() === actName ||
+                            actName.includes(a.name.toLowerCase()) ||
+                            a.name.toLowerCase().includes(actName)
+                        );
+                        return actMatch ? actMatch.social : true;
+                    });
+
+                    const sFee = hasSocial ? socialFee : 0;
+                    const aFee = Math.max(0, (p.amount || 0) - sFee);
+
+                    await window.DataManager.updatePayment(p.id, {
+                        socialFeeAmount: sFee,
+                        activitiesFeeAmount: aFee,
+                        lateFeeAmount: 0
+                    });
+                    count++;
+                }
+            }
+            alert(`✅ Se actualizaron ${count} registros de pago con éxito.`);
+            renderAdminDashboard();
+        } catch (err) {
+            alert("Error: " + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-tools"></i> Reparar Desglose de Pagos Históricos';
+        }
+    });
+
 
 
     // Pagos
@@ -767,6 +815,8 @@ function setupEventListeners() {
         e.preventDefault();
         const btn = e.target.querySelector('button[type="submit"]');
         const method = document.getElementById('payment-method').value;
+        const month = document.getElementById('payment-month').value;
+        const amount = parseInt(document.getElementById('payment-amount').value);
         const file = document.getElementById('payment-receipt').files[0];
 
         if (method === 'Transferencia' && !file) {
@@ -777,14 +827,19 @@ function setupEventListeners() {
         btn.disabled = true;
         try {
             const receipt = file ? await window.DataManager.fileToBase64(file) : null;
+            const breakdown = await window.calculateBreakdown(currentUser.id, month, amount);
+
             await window.DataManager.addPayment({
                 userId: currentUser.id,
                 userName: currentUser.name,
                 childrenNames: currentUser.children || 'Hijos',
-                month: document.getElementById('payment-month').value,
-                amount: parseInt(document.getElementById('payment-amount').value),
+                month: month,
+                amount: amount,
+                socialFeeAmount: breakdown.social,
+                activitiesFeeAmount: breakdown.activities,
                 paymentMethod: method,
-                status: 'pending', receiptURL: receipt
+                status: 'pending',
+                receiptURL: receipt
             });
             document.getElementById('payment-modal').classList.remove('active');
             updateUI();
@@ -867,9 +922,15 @@ function setupEventListeners() {
         btn.innerText = "Procesando...";
 
         try {
+            // Recalcular breakdown para el monto final aprobado
+            const breakdown = await window.calculateBreakdown(activePaymentForApproval.userId, activePaymentForApproval.month, finalAmount);
+
             await window.DataManager.updatePayment(activePaymentForApproval.id, {
                 status: 'approved',
-                amount: finalAmount
+                amount: finalAmount,
+                socialFeeAmount: breakdown.social,
+                activitiesFeeAmount: breakdown.activities,
+                lateFeeAmount: breakdown.late
             });
             document.getElementById('approve-payment-modal').classList.remove('active');
             toast('Pago aprobado con éxito');
@@ -881,6 +942,31 @@ function setupEventListeners() {
             btn.innerText = "Confirmar y Aprobar";
         }
     });
+
+    // Helper Global para cálculos de cuotas
+    window.calculateBreakdown = async (userId, month, totalAmount) => {
+        const config = await window.DataManager.getConfig();
+        const user = await window.DataManager.getUser(userId) || currentUser;
+        const children = getChildList(user);
+        const activities = config.activities || [];
+
+        let hasSocial = false;
+        children.forEach(k => {
+            const act = activities.find(a => a.name.toLowerCase() === k.category.toLowerCase());
+            if (act && act.social) hasSocial = true;
+        });
+
+        const socialFee = hasSocial ? (config.socialFee || 0) : 0;
+        // Si el total es menor a la cuota social (raro), la cuota social es el total
+        const finalSocial = Math.min(socialFee, totalAmount);
+        const remaining = totalAmount - finalSocial;
+
+        return {
+            social: finalSocial,
+            activities: remaining,
+            late: 0 // Simplificado para el breakdown de reportes
+        };
+    };
     // Exportar CSV
     document.getElementById('btn-export-csv')?.addEventListener('click', async () => {
         const payments = await window.DataManager.getPayments();
@@ -1165,17 +1251,55 @@ function renderActivitiesConfig(activities) {
 
 async function renderAdminDashboard(manualPayments = null) {
     const payments = manualPayments || await window.DataManager.getPayments();
+    const config = await window.DataManager.getConfig();
+    const activities = config.activities || [];
+    const socialFee = config.socialFee || 5000;
+
     const tbody = document.querySelector('#admin-payments-table tbody');
     if (!tbody) return; tbody.innerHTML = '';
     const statusMap = { 'pending': 'Pendiente', 'approved': 'Aprobado', 'rejected': 'Rechazado' };
     const fStatus = document.getElementById('filter-status').value;
     const fMonth = document.getElementById('filter-month').value;
-    let total = 0; let pending = 0;
+
+    let total = 0;
+    let socialTotal = 0;
+    let activitiesTotal = 0;
+    let pending = 0;
 
     payments.forEach(p => {
         if (fStatus !== 'all' && p.status !== fStatus) return;
         if (fMonth !== 'all' && p.month !== fMonth) return;
-        if (p.status === 'approved') total += (p.amount || 0);
+
+        const isApproved = p.status === 'approved';
+        const isManual = p.isManualCollection === true;
+
+        if (isApproved) {
+            total += (p.amount || 0);
+
+            let sFee = p.socialFeeAmount;
+            let aFee = p.activitiesFeeAmount;
+
+            // Smart Backfill: Si no tiene el desglose, lo calculamos sobre la marcha
+            if (sFee === undefined || sFee === null) {
+                const kids = parseChildren(p.childrenNames || '');
+                const hasSocial = kids.some(k => {
+                    const actName = k.category.toLowerCase();
+                    const actMatch = activities.find(a =>
+                        a.name.toLowerCase() === actName ||
+                        actName.includes(a.name.toLowerCase()) ||
+                        a.name.toLowerCase().includes(actName)
+                    );
+                    return actMatch ? actMatch.social : true;
+                });
+
+                sFee = hasSocial ? socialFee : 0;
+                aFee = Math.max(0, (p.amount || 0) - sFee);
+            }
+
+            socialTotal += (sFee || 0);
+            activitiesTotal += (aFee || 0);
+        }
+
         if (p.status === 'pending') pending++;
 
         const tr = document.createElement('tr');
@@ -1184,20 +1308,30 @@ async function renderAdminDashboard(manualPayments = null) {
             <td><b>${p.userName}</b><br><small>${p.childrenNames || ''}</small></td>
             <td>${p.month}</td>
             <td>$ ${(p.amount || 0).toLocaleString('es-AR')}</td>
-            <td><span class="badge ${p.paymentMethod === 'Efectivo' ? 'badge-pending' : 'badge-approved'}" style="background: ${p.paymentMethod === 'Efectivo' ? '#94a3b8' : '#3b82f6'}">${p.paymentMethod || 'Transf.'}</span></td>
-            <td>${p.receiptURL ? `<button class="btn-text btn-view-admin-photo" data-id="${p.id}"><i class="fas fa-image"></i> Ver Foto</button>` : '---'}</td>
+            <td>
+                <span class="badge" style="background: ${isManual ? '#8b5cf6' : (p.paymentMethod === 'Efectivo' ? '#94a3b8' : '#3b82f6')}; color: white;">
+                    ${isManual ? 'Manual (Sin Caja)' : (p.paymentMethod || 'Transf.')}
+                </span>
+            </td>
+            <td>${p.receiptURL ? `<button class="btn-text btn-view-admin-photo" data-id="${p.id}"><i class="fas fa-image"></i> Ver Foto</button>` : (isManual ? '<i class="fas fa-user-edit"></i> Admin' : '---')}</td>
             <td><span class="badge badge-${p.status}">${statusMap[p.status]}</span></td>
             <td>
                 <div style="display:flex; gap:0.5rem">
                     ${p.status === 'pending' ? `<button class="btn-action approve" data-id="${p.id}" title="Aprobar Pago"><i class="fas fa-check"></i></button>` : ''}
                     ${p.status === 'pending' ? `<button class="btn-action reject-quick" data-id="${p.id}" title="Rechazar Pago"><i class="fas fa-times"></i></button>` : ''}
+                    ${isApproved ? `<button class="btn-action reject" onclick="window.deletePayment('${p.id}')" title="Eliminar Registro" style="background:#fee2e2; color:#ef4444; border:none; border-radius:4px; cursor:pointer; width:30px; height:30px; display:flex; align-items:center; justify-content:center;"><i class="fas fa-trash"></i></button>` : ''}
                 </div>
             </td>`;
         tbody.appendChild(tr);
     });
     document.getElementById('stat-pending').innerText = pending;
     document.getElementById('stat-total').innerText = `$ ${total.toLocaleString('es-AR')}`;
+    const socialEl = document.getElementById('stat-social-total');
+    if (socialEl) socialEl.innerText = `$ ${socialTotal.toLocaleString('es-AR')}`;
+    const activitiesEl = document.getElementById('stat-activities-total');
+    if (activitiesEl) activitiesEl.innerText = `$ ${activitiesTotal.toLocaleString('es-AR')}`;
 
+    // Re-bind listeners
     tbody.querySelectorAll('.approve').forEach(btn => btn.addEventListener('click', async () => {
         const p = payments.find(pay => pay.id === btn.dataset.id);
         if (p) openApproveModal(p);
@@ -1417,7 +1551,9 @@ async function renderAdminCC(manualPayments = null) {
             monthTds += `
                 <td class="month-col ${isCurrent ? 'current-month-col' : ''}">
                     <div class="status-check ${isFull ? 'ok' : (hasPending ? 'pending' : (isDebt ? 'debt' : 'void'))}" 
-                         title="${m}: $ ${paid.toLocaleString('es-AR')} de $ ${monthlyExpected.toLocaleString('es-AR')} ${hasPending ? '(Hay un pago pendiente de revisión)' : ''}">
+                         onclick="${isDebt || (isPartial && !hasPending) ? `window.doManualCollection('${u.id || u.username}', '${m}', ${monthlyExpected - paid}, '${u.name}', '${children.map(c => c.name).join(', ')}')` : ''}"
+                         style="${isDebt || (isPartial && !hasPending) ? 'cursor:pointer;' : ''}"
+                         title="${m}: $ ${paid.toLocaleString('es-AR')} de $ ${monthlyExpected.toLocaleString('es-AR')} ${hasPending ? '(Hay un pago pendiente de revisión)' : (isDebt ? 'Haz clic para cobro manual' : '')}">
                         <i class="fas ${isFull ? 'fa-check' : (hasPending ? 'fa-clock' : (isDebt ? 'fa-dollar-sign' : 'fa-minus'))}"></i>
                     </div>
                 </td>`;
@@ -1437,3 +1573,51 @@ async function renderAdminCC(manualPayments = null) {
         tbody.appendChild(tr);
     });
 }
+
+// Lógica de Cobro Manual (Solicitado por usuario)
+window.doManualCollection = async (userId, month, amount, userName, kids) => {
+    if (!confirm(`¿Generar COBRO MANUAL por $ ${amount.toLocaleString('es-AR')} para ${userName} (${month})?\n\nEsto saldará la deuda e INGRESARÁ el monto a la caja del reporte del mes.`)) return;
+
+    try {
+        // Necesitamos la config para calcular el breakdown
+        const config = await window.DataManager.getConfig();
+        const activities = config.activities || [];
+        const socialFee = config.socialFee || 0;
+
+        // Simular el desglose para el registro manual
+        // Aquí simplificamos: si hay cuota social configurada, la restamos del total para obtener actividades.
+        // En un sistema real buscaríamos exactamente qué actividades tiene el usuario.
+
+        const user = await window.DataManager.getUser(userId);
+        const children = getChildList(user);
+        let socialAmount = 0;
+        let hasSocial = children.some(k => {
+            const act = activities.find(a => a.name.toLowerCase() === k.category.toLowerCase());
+            return act && act.social;
+        });
+        if (hasSocial) socialAmount = socialFee;
+
+        const actAmount = amount - socialAmount;
+
+        await window.DataManager.addPayment({
+            userId: userId,
+            userName: userName,
+            childrenNames: kids,
+            month: month,
+            amount: amount,
+            socialFeeAmount: socialAmount,
+            activitiesFeeAmount: actAmount,
+            paymentMethod: 'Manual',
+            status: 'approved',
+            isManualCollection: true, // Flag CRÍTICO: No suma a caja
+            receiptURL: null
+        });
+
+        toast('Cobro manual registrado');
+        renderAdminCC();
+        renderAdminDashboard();
+    } catch (e) {
+        console.error(e);
+        toast('Error al registrar cobro manual', 'error');
+    }
+};

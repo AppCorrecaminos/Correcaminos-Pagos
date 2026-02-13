@@ -303,16 +303,32 @@
 
                     <div class="stats-grid" id="admin-stats-grid">
                         <div class="stat-card">
-                            <div class="stat-icon athletics"><i class="fas fa-clock"></i></div>
+                            <div class="stat-icon athletics" style="background: var(--warning);"><i
+                                    class="fas fa-clock"></i></div>
                             <div class="stat-info">
-                                <span class="stat-label">Pendientes de revisión</span>
+                                <span class="stat-label">Pendientes</span>
                                 <span class="stat-value" id="stat-pending">0</span>
                             </div>
                         </div>
-                        <div class="stat-card highlight">
-                            <div class="stat-icon total"><i class="fas fa-hand-holding-dollar"></i></div>
+                        <div class="stat-card">
+                            <div class="stat-icon social" style="background: var(--secondary);"><i
+                                    class="fas fa-users"></i></div>
                             <div class="stat-info">
-                                <span class="stat-label">Total Cobrado (Mes)</span>
+                                <span class="stat-label">Cuotas Sociales</span>
+                                <span class="stat-value" id="stat-social-total">$ 0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon athletics"><i class="fas fa-running"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-label">Cuotas Actividades</span>
+                                <span class="stat-value" id="stat-activities-total">$ 0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card highlight">
+                            <div class="stat-icon total"><i class="fas fa-cash-register"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-label">Total en Caja (Mes)</span>
                                 <span class="stat-value" id="stat-total">$ 0</span>
                             </div>
                         </div>
@@ -481,8 +497,15 @@
                                         style="color: var(--danger); font-weight: 600; text-align: left; width: 100%; border: 1px solid var(--danger); padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem;">
                                         <i class="fas fa-magic"></i> Migrar Datos a Fichas Técnicas
                                     </button>
-                                    <p class="text-xs" style="color: #999; margin-bottom: 1rem;">Convierte el texto de
-                                        "Hijos" en carpetas individuales habilitando la carga de DNI y ficha completa.
+
+                                    <button id="btn-fix-payment-data" class="btn-text" type="button"
+                                        style="color: #6366f1; font-weight: 600; text-align: left; width: 100%; border: 1px solid #6366f1; padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem;">
+                                        <i class="fas fa-tools"></i> Reparar Desglose de Pagos Históricos
+                                    </button>
+
+                                    <p class="text-xs" style="color: #999; margin-bottom: 1rem;">Recalcula y guarda el
+                                        desglose (Cuota Social vs Actividad) para todos los pagos antiguos que figuran
+                                        en $0.
                                     </p>
 
                                     <button id="btn-sync-to-cloud" class="btn-text" type="button"

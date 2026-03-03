@@ -143,7 +143,8 @@ const DataManager = {
                 return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => b.timestamp - a.timestamp);
             } catch (e) { }
         }
-        return JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
+        const payments = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
+        return payments.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     },
 
     async getPaymentsByUser(userId) {

@@ -287,10 +287,7 @@ async function updateUI() {
                 totalActivitiesCost += price;
 
                 // Determinar Logo
-                let logoSrc = 'img/Logo Correcaminos.jpeg'; // Default
-                if (kid.category.includes("Kids") || kid.category.includes("Infantiles")) {
-                    logoSrc = 'img/Logo Kids.jpeg';
-                }
+                let logoSrc = 'img/Nuevo Logo Correcaminos.jpeg'; // Use the new logo for everything
 
                 tableRowsHtml += `
                     <tr>
@@ -1401,7 +1398,15 @@ async function renderUserDashboard() {
     const currentMonthName = allMonths[currentMonthIndex];
 
     const currentMonthPayment = payments.find(p => p.month === currentMonthName);
-    const lastRejected = payments.filter(p => p.status === 'rejected').sort((a, b) => b.timestamp - a.timestamp)[0];
+    const activeRejections = payments.filter(p => p.status === 'rejected').filter(rej => {
+        const newerPayment = payments.find(p =>
+            p.month === rej.month &&
+            (p.status === 'approved' || p.status === 'pending') &&
+            p.timestamp > rej.timestamp
+        );
+        return !newerPayment;
+    });
+    const lastRejected = activeRejections.sort((a, b) => b.timestamp - a.timestamp)[0];
 
     const statusCard = document.querySelector('.stat-card.highlight');
     const statusIcon = statusCard.querySelector('.stat-icon i');
@@ -1445,12 +1450,11 @@ async function renderUserDashboard() {
     if (timelineContainer) {
         timelineContainer.innerHTML = '';
         months.forEach(m => {
-            const hasPayment = payments.some(p => p.month === m && p.status === 'approved');
-            const isPending = payments.some(p => p.month === m && p.status === 'pending');
-            const isRejected = payments.some(p => p.month === m && p.status === 'rejected');
+            const mPayments = payments.filter(p => p.month === m).sort((a, b) => b.timestamp - a.timestamp);
+            const latestStatus = mPayments.length > 0 ? mPayments[0].status : 'idle';
             const isCurrent = m === currentMonthName;
 
-            const state = hasPayment ? 'paid' : (isRejected ? 'rejected' : (isPending ? 'pending' : 'idle'));
+            const state = latestStatus === 'approved' ? 'paid' : (latestStatus === 'rejected' ? 'rejected' : (latestStatus === 'pending' ? 'pending' : 'idle'));
 
             const div = document.createElement('div');
             div.className = `timeline-item ${state} ${isCurrent ? 'active' : ''}`;

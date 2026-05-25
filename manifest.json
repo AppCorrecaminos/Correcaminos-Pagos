@@ -1,0 +1,28 @@
+{
+  "name": "Correcaminos - Plataforma de Pagos",
+  "short_name": "Correcaminos",
+  "description": "Plataforma de pagos y control de cuotas para la Escuela de Atletismo Correcaminos",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a365d",
+  "theme_color": "#1a365d",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "img/icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "img/icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    },
+    {
+      "src": "img/icons/icon-maskable.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
+}

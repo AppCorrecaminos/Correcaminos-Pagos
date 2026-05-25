@@ -1,30 +1,39 @@
 :root {
-    /* Color Palette */
-    --primary: #1a365d;
-    /* Deep Navy Blue */
-    --primary-light: #2a4365;
-    --accent: #f6ad55;
-    /* Gold/Orange Accent */
-    --accent-hover: #ed8936;
-    --success: #38a169;
-    --warning: #ecc94b;
-    --danger: #e53e3e;
-    --bg-main: #f7fafc;
+    /* Color Palette - Premium HSL Tailored */
+    --primary-h: 215;
+    --primary-s: 56%;
+    --primary-l: 23%;
+    
+    --primary: hsl(var(--primary-h), var(--primary-s), var(--primary-l)); /* Rich Premium Navy Blue */
+    --primary-light: hsl(var(--primary-h), var(--primary-s), calc(var(--primary-l) + 8%));
+    --primary-dark: hsl(var(--primary-h), var(--primary-s), calc(var(--primary-l) - 8%));
+    
+    --accent-h: 34;
+    --accent-s: 91%;
+    --accent-l: 65%;
+    --accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l)); /* Vibrant Gold/Orange */
+    --accent-hover: hsl(var(--accent-h), var(--accent-s), calc(var(--accent-l) - 8%));
+    
+    --success: #10b981; /* Emerald success */
+    --warning: #f59e0b; /* Amber warning */
+    --danger: #ef4444;  /* Rose danger */
+    
+    --bg-main: #f8fafc;
     --bg-card: #ffffff;
-    --text-main: #2d3748;
-    --text-muted: #718096;
+    --text-main: #0f172a; /* Slate 900 for modern look */
+    --text-muted: #64748b; /* Slate 500 */
     --text-white: #ffffff;
     --border: #e2e8f0;
 
-    /* Shadows */
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
-    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05), 0 10px 15px rgba(0, 0, 0, 0.1);
-    --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    /* Shadows - Fluid and Soft */
+    --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.05);
+    --shadow-md: 0 8px 30px rgba(15, 23, 42, 0.06);
+    --shadow-lg: 0 20px 40px rgba(15, 23, 42, 0.08);
 
     /* Border Radius */
     --radius-sm: 0.375rem;
     --radius-md: 0.5rem;
-    --radius-lg: 1rem;
+    --radius-lg: 1.25rem;
     --radius-full: 9999px;
 }
 
@@ -199,13 +208,19 @@ body {
 }
 
 .login-card {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     padding: 2.5rem;
     border-radius: var(--radius-lg);
     width: 100%;
     max-width: 400px;
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 20px 40px rgba(26, 54, 93, 0.15);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.login-card:hover {
+    transform: translateY(-2px);
 }
 
 .login-header {
@@ -1104,5 +1119,112 @@ select {
     .db-status {
         padding: 0.5rem;
         margin-right: 0;
+    }
+}
+
+/* Premium PWA Glassmorphism & Responsiveness Upgrade */
+.modal-content {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Micro-animations and Ripple effect */
+.btn-primary, .btn-secondary {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-primary:active, .btn-secondary:active {
+    transform: scale(0.96);
+}
+
+.stat-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+}
+
+/* Responsive bottom navigation menu for mobile screens */
+@media (max-width: 768px) {
+    .navbar {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border);
+    }
+    .nav-content {
+        width: 100%;
+    }
+    .brand-main {
+        font-size: 0.95rem;
+    }
+    .brand-sub {
+        font-size: 0.75rem;
+    }
+    /* Hide navigation menu from the top bar */
+    .navbar .nav-menu {
+        display: none;
+    }
+    
+    /* Render beautiful bottom fixed navigation bar */
+    .nav-menu {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 65px;
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-top: 1px solid var(--border);
+        display: flex !important;
+        justify-content: space-around;
+        align-items: center;
+        z-index: 999;
+        box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.05);
+        padding: 0 0.5rem;
+    }
+    .nav-link {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        width: 22%;
+        height: 100%;
+        padding: 0.5rem 0;
+        font-weight: 600;
+        transition: color 0.2s ease, transform 0.2s ease;
+    }
+    .nav-link i {
+        font-size: 1.25rem;
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .nav-link.active {
+        color: var(--primary);
+    }
+    .nav-link.active i {
+        transform: translateY(-3px) scale(1.15);
+        color: var(--primary-light);
+    }
+    .nav-link.active::after {
+        display: none; /* Hide standard desktop bottom line */
+    }
+    
+    /* Ensure main content doesn't overlap bottom bar */
+    .container {
+        margin: 1rem auto 5.5rem auto;
+        padding: 0 0.75rem;
+    }
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
     }
 }

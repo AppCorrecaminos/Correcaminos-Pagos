@@ -36,6 +36,19 @@ function initializeFirebase() {
         db = window.firebase.firestore.getFirestore(app);
         auth = window.firebase.auth.getAuth(app);
 
+        // ACTIVACIÓN DE PERSISTENCIA OFFLINE EN FIRESTORE (PWA Native feature)
+        db.enablePersistence({ synchronizeTabs: true })
+            .then(() => {
+                console.log("Persistencia local de Firestore activada con éxito.");
+            })
+            .catch((err) => {
+                if (err.code == 'failed-precondition') {
+                    console.warn("Múltiples pestañas abiertas. Persistencia activa solo en una pestaña.");
+                } else if (err.code == 'unimplemented') {
+                    console.warn("El navegador actual no soporta persistencia local.");
+                }
+            });
+
         window.DataManager.init(db);
         window.Auth.init(auth, db);
 

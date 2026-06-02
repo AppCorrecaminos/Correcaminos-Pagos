@@ -5,6 +5,7 @@
 let db = null;
 let auth = null;
 let currentUser = null;
+let selectedTimelineMonth = null;
 
 function updateDBStatus(isOnline, message = "") {
     const ids = ['db-status', 'db-status-admin'];
@@ -203,6 +204,18 @@ function getChildList(user) {
     return parseChildren(user.children);
 }
 
+function getFirstPendingMonth(payments, currentMonthName) {
+    const months = ["Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    for (const m of months) {
+        const mPayments = payments.filter(p => p.month === m).sort((a, b) => b.timestamp - a.timestamp);
+        const latestStatus = mPayments.length > 0 ? mPayments[0].status : 'idle';
+        if (latestStatus !== 'approved') {
+            return m;
+        }
+    }
+    return currentMonthName;
+}
+
 async function updateUI() {
     if (!currentUser) return;
     try {
@@ -234,6 +247,7 @@ async function updateUI() {
             });
         } else {
             await renderUserDashboard();
+            const payments = await window.DataManager.getPaymentsByUser(currentUser.id);
             const nameDisp = document.getElementById('user-display-name');
             if (nameDisp) nameDisp.innerText = currentUser.name;
 
@@ -255,8 +269,18 @@ async function updateUI() {
             const currentMonthIndex = today.getMonth();
 
             // Si es Enero (0), mostramos Febrero (1) por defecto para el cobro
-            const displayMonthIndex = currentMonthIndex === 0 ? 1 : currentMonthIndex;
-            const displayMonthName = monthsNames[displayMonthIndex];
+            const defaultMonthIndex = currentMonthIndex === 0 ? 1 : currentMonthIndex;
+            const defaultMonthName = monthsNames[defaultMonthIndex];
+
+            // Usar el mes seleccionado en la línea de tiempo, con fallback al mes por defecto
+            const displayMonthName = selectedTimelineMonth || defaultMonthName;
+
+            // Comprobar el estado del pago para el mes seleccionado
+            const mPayments = payments.filter(p => p.month === displayMonthName).sort((a, b) => b.timestamp - a.timestamp);
+            const paymentForMonth = mPayments.length > 0 ? mPayments[0] : null;
+            const isPaid = paymentForMonth && paymentForMonth.status === 'approved';
+            const isPending = paymentForMonth && paymentForMonth.status === 'pending';
+            const isRejected = paymentForMonth && paymentForMonth.status === 'rejected';
 
             const lateFeeDay = config.lateFeeDay || 12;
             const lateFeeAmount = config.lateFeeAmount || 5000;
@@ -274,7 +298,7 @@ async function updateUI() {
                 return today > deadline;
             };
 
-            const lateStatus = checkLate(displayMonthName);
+            const lateStatus = !isPaid && !isPending && checkLate(displayMonthName);
 
             let totalActivitiesCost = 0;
             let totalLateFees = 0;
@@ -288,10 +312,15 @@ async function updateUI() {
                 const price = activity ? activity.price : (activities[0]?.price || 40000);
 
                 let kidLateFee = 0;
-                if (lateStatus) {
+                if (isPaid || isPending) {
+                    // Si ya se registró el pago, obtenemos el recargo real que se cobró/informó.
+                    const totalLatePaid = paymentForMonth.lateFeeAmount || 0;
+                    kidLateFee = children.length > 0 ? (totalLatePaid / children.length) : 0;
+                } else if (lateStatus) {
                     kidLateFee = lateFeeAmount;
-                    totalLateFees += kidLateFee;
                 }
+
+                totalLateFees += kidLateFee;
 
                 if (activity && activity.social) {
                     appliesSocialFee = true;
@@ -302,6 +331,18 @@ async function updateUI() {
                 // Determinar Logo
                 let logoSrc = 'img/Nuevo Logo Correcaminos.jpeg'; // Use the new logo for everything
 
+                // El HTML de la mora cambia de estilo según si ya está pago/pendiente o no
+                let moraHtml = '';
+                if (kidLateFee > 0) {
+                    if (isPaid) {
+                        moraHtml = `<br><span class="text-xs" style="color:var(--success); font-weight:600;"><i class="fas fa-check-circle"></i> + Recargo Mora (Cobrado)</span>`;
+                    } else if (isPending) {
+                        moraHtml = `<br><span class="text-xs" style="color:var(--warning); font-weight:600;"><i class="fas fa-hourglass-half"></i> + Recargo Mora (En revisión)</span>`;
+                    } else {
+                        moraHtml = `<br><span class="text-xs" style="color:var(--danger); font-weight:600;"><i class="fas fa-clock"></i> + Recargo Mora</span>`;
+                    }
+                }
+
                 tableRowsHtml += `
                     <tr>
                         <td>
@@ -310,26 +351,44 @@ async function updateUI() {
                                 <div>
                                     <b>${kid.name}</b> <br>
                                     <span class="cost-tag" style="font-size:0.8rem; color:#666;">${kid.category}</span>
-                                    ${kidLateFee > 0 ? `<br><span class="text-xs" style="color:var(--danger); font-weight:600;"><i class="fas fa-clock"></i> + Recargo Mora</span>` : ''}
+                                    ${moraHtml}
                                 </div>
                             </div>
                         </td>
                         <td align="right" style="vertical-align: bottom;">
                             $ ${price.toLocaleString('es-AR')}
-                            ${kidLateFee > 0 ? `<br><small style="color:var(--danger)">+$ ${kidLateFee.toLocaleString('es-AR')}</small>` : ''}
+                            ${kidLateFee > 0 ? `<br><small style="color:${isPaid ? 'var(--success)' : (isPending ? 'var(--warning)' : 'var(--danger)')}">+$ ${kidLateFee.toLocaleString('es-AR')}</small>` : ''}
                         </td>
                     </tr>`;
             });
 
-            const socialFee = appliesSocialFee ? (config.socialFee || 0) : 0;
-            const finalTotal = totalActivitiesCost + socialFee + totalLateFees;
+            const socialFee = appliesSocialFee ? (isPaid || isPending ? (paymentForMonth.socialFeeAmount || 0) : (config.socialFee || 0)) : 0;
+            const finalTotal = isPaid || isPending ? paymentForMonth.amount : (totalActivitiesCost + socialFee + totalLateFees);
+
+            // Ajustar textos del desglose según estado del pago
+            let titleSuffix = '';
+            let totalLabel = 'Total a abonar:';
+            let totalColor = 'var(--primary)';
+            if (isPaid) {
+                titleSuffix = ' <span class="badge badge-approved" style="font-size:0.8rem; margin-left:0.5rem;"><i class="fas fa-check-circle"></i> PAGADA</span>';
+                totalLabel = 'Total abonado:';
+                totalColor = 'var(--success)';
+            } else if (isPending) {
+                titleSuffix = ' <span class="badge badge-pending" style="font-size:0.8rem; margin-left:0.5rem;"><i class="fas fa-hourglass-half"></i> EN REVISIÓN</span>';
+                totalLabel = 'Total informado:';
+                totalColor = 'var(--warning)';
+            } else if (isRejected) {
+                titleSuffix = ' <span class="badge badge-rejected" style="font-size:0.8rem; margin-left:0.5rem;"><i class="fas fa-times-circle"></i> RECHAZADA</span>';
+                totalLabel = 'Total a abonar:';
+                totalColor = 'var(--danger)';
+            }
 
             if (breakdownContainer) {
                 breakdownContainer.innerHTML = `
                     <div class="card" style="margin-top: 2rem;">
                         <div class="card-header">
                             <div>
-                                <h3>Desglose Detallado - Cuota ${displayMonthName}</h3>
+                                <h3>Desglose Detallado - Cuota ${displayMonthName}${titleSuffix}</h3>
                                 <p class="text-xs">Valores vigentes para el periodo seleccionado.</p>
                             </div>
                         </div>
@@ -346,10 +405,10 @@ async function updateUI() {
                                 </tr>
                             </table>
                             <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-                                <span style="font-weight: 700; font-size: 1.1rem;">Total a abonar:</span>
-                                <span style="font-weight: 800; font-size: 1.5rem; color: var(--primary);">$ ${finalTotal.toLocaleString('es-AR')}</span>
+                                <span style="font-weight: 700; font-size: 1.1rem;">${totalLabel}</span>
+                                <span style="font-weight: 800; font-size: 1.5rem; color: ${totalColor};">$ ${finalTotal.toLocaleString('es-AR')}</span>
                             </div>
-                            ${!lateStatus ? `<p class="text-xs" style="margin-top: 1rem; color: var(--success);"><i class="fas fa-info-circle"></i> Tienes hasta el día ${lateFeeDay} para abonar sin recargo por mora.</p>` : ''}
+                            ${(!lateStatus && !isPaid && !isPending) ? `<p class="text-xs" style="margin-top: 1rem; color: var(--success);"><i class="fas fa-info-circle"></i> Tienes hasta el día ${lateFeeDay} para abonar sin recargo por mora.</p>` : ''}
                         </div>
                     </div>`;
             }
@@ -858,7 +917,32 @@ function setupEventListeners() {
     });
 
     document.getElementById('btn-report-payment')?.addEventListener('click', () => {
-        document.getElementById('payment-modal').classList.add('active');
+        const modal = document.getElementById('payment-modal');
+        const monthSelect = document.getElementById('payment-month');
+        
+        if (monthSelect) {
+            window.DataManager.getPaymentsByUser(currentUser.id).then(payments => {
+                const now = new Date();
+                const allMonths = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+                let currentMonthIndex = now.getMonth();
+                if (currentMonthIndex === 0) currentMonthIndex = 1;
+                const currentMonthName = allMonths[currentMonthIndex];
+                
+                const targetMonth = selectedTimelineMonth || currentMonthName;
+                const mPayments = payments.filter(p => p.month === targetMonth);
+                const isPaidOrPending = mPayments.length > 0 && (mPayments[0].status === 'approved' || mPayments[0].status === 'pending');
+                
+                if (isPaidOrPending) {
+                    monthSelect.value = getFirstPendingMonth(payments, currentMonthName);
+                } else {
+                    monthSelect.value = targetMonth;
+                }
+                
+                monthSelect.dispatchEvent(new Event('change'));
+            });
+        }
+        
+        modal.classList.add('active');
     });
 
     // Filtros Reportes
@@ -1457,6 +1541,11 @@ async function renderUserDashboard() {
         breakdownContainer.insertAdjacentHTML('afterbegin', alertHtml);
     }
 
+    // Inicializar el mes seleccionado de la línea de tiempo si es nulo
+    if (!selectedTimelineMonth) {
+        selectedTimelineMonth = getFirstPendingMonth(payments, currentMonthName);
+    }
+
     // Línea de Tiempo Dinámica (Horizontal & Interactiva)
     const months = ["Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
     const timelineContainer = document.getElementById('user-yearly-timeline');
@@ -1465,12 +1554,13 @@ async function renderUserDashboard() {
         months.forEach(m => {
             const mPayments = payments.filter(p => p.month === m).sort((a, b) => b.timestamp - a.timestamp);
             const latestStatus = mPayments.length > 0 ? mPayments[0].status : 'idle';
-            const isCurrent = m === currentMonthName;
+            const isSelected = m === selectedTimelineMonth;
 
             const state = latestStatus === 'approved' ? 'paid' : (latestStatus === 'rejected' ? 'rejected' : (latestStatus === 'pending' ? 'pending' : 'idle'));
 
             const div = document.createElement('div');
-            div.className = `timeline-item ${state} ${isCurrent ? 'active' : ''}`;
+            div.className = `timeline-item ${state} ${isSelected ? 'active' : ''}`;
+            div.style.cursor = 'pointer';
             div.innerHTML = `
                 <div class="tm-dot"></div>
                 <div class="tm-content">
@@ -1478,10 +1568,14 @@ async function renderUserDashboard() {
                     <span class="tm-status">${state === 'paid' ? 'Pagado' : (state === 'rejected' ? 'Rechazado' : (state === 'pending' ? 'En revisión' : 'Pendiente'))}</span>
                 </div>
             `;
+            div.addEventListener('click', () => {
+                selectedTimelineMonth = m;
+                updateUI();
+            });
             timelineContainer.appendChild(div);
         });
 
-        // Auto-scroll al mes actual
+        // Auto-scroll al mes seleccionado
         setTimeout(() => {
             const active = timelineContainer.querySelector('.active');
             if (active) active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });

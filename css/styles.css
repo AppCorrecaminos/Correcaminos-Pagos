@@ -907,6 +907,16 @@ select {
     position: relative;
     scroll-snap-align: center;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+}
+
+.timeline-item:hover .tm-dot {
+    transform: scale(1.2);
+    box-shadow: 0 0 0 4px rgba(26, 54, 93, 0.05);
+}
+
+.timeline-item.active:hover .tm-dot {
+    transform: scale(1.4);
 }
 
 .tm-dot {

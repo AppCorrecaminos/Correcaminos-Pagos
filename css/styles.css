@@ -765,11 +765,11 @@ select {
     gap: 0.5rem;
 }
 
-.admin-tab {
+.admin-tab, .user-tab {
     display: none;
 }
 
-.admin-tab.active {
+.admin-tab.active, .user-tab.active {
     display: block;
     animation: fadeIn 0.4s ease-out;
 }

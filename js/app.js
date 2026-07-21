@@ -108,7 +108,17 @@ async function initApp() {
 function showView(viewId) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     const target = document.getElementById(viewId);
-    if (target) target.classList.add('active');
+    if (target) {
+        target.classList.add('active');
+        if (viewId === 'user-view') {
+            document.querySelectorAll('.user-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById('user-dashboard-tab')?.classList.add('active');
+            const navLinks = target.querySelectorAll('.nav-link');
+            navLinks.forEach(l => l.classList.remove('active'));
+            const defaultNav = target.querySelector('.nav-link[data-target="user-dashboard-tab"]');
+            if (defaultNav) defaultNav.classList.add('active');
+        }
+    }
 }
 
 function toast(message, type = 'success') {

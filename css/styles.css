@@ -1238,3 +1238,31 @@ select {
         gap: 1rem;
     }
 }
+
+/* Benefit Cards Visual Aesthetics */
+.benefit-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 250px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--bg-card);
+}
+
+.benefit-card:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--primary-light);
+}
+
+.benefit-card.incomplete {
+    border-left: 5px solid var(--danger);
+    background: #fcfcfc;
+}
+
+.coupon-badge {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}

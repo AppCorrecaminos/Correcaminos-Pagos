@@ -87,7 +87,11 @@ async function initApp() {
             const fresh = await window.DataManager.getUser(currentUser.id);
             if (fresh) {
                 currentUser = fresh;
-                localStorage.setItem('correcaminos_session', JSON.stringify(currentUser));
+                try {
+                    localStorage.setItem('correcaminos_session', JSON.stringify(currentUser));
+                } catch (errStorage) {
+                    console.warn("Storage lleno al actualizar sesión:", errStorage);
+                }
             }
         } catch (e) {
             console.warn("No se pudo refrescar el usuario desde la nube, usando sesión local.", e);
@@ -224,7 +228,11 @@ async function updateUI() {
             const freshUser = await window.DataManager.getUser(currentUser.id);
             if (freshUser) {
                 currentUser = freshUser;
-                localStorage.setItem('correcaminos_session', JSON.stringify(currentUser));
+                try {
+                    localStorage.setItem('correcaminos_session', JSON.stringify(currentUser));
+                } catch (errStorage) {
+                    console.warn("Storage lleno al actualizar sesión en updateUI:", errStorage);
+                }
             }
         }
 
@@ -693,14 +701,27 @@ function setupEventListeners() {
         }
     });
 
-    // Navegación Admin
+    // Navegación General (Admin y Socio)
     document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', () => {
-            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-            document.getElementById(link.dataset.target).classList.add('active');
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            const targetId = link.dataset.target;
+            const targetEl = document.getElementById(targetId);
+            if (!targetEl) return;
+
+            if (targetEl.classList.contains('admin-tab')) {
+                document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+                targetEl.classList.add('active');
+                if (targetId === 'admin-cc') renderAdminCC();
+                if (targetId === 'admin-benefits') renderAdminBenefits();
+            } else if (targetEl.classList.contains('user-tab')) {
+                document.querySelectorAll('.user-tab').forEach(t => t.classList.remove('active'));
+                targetEl.classList.add('active');
+                if (targetId === 'user-benefits-tab') renderUserBenefits();
+                if (targetId === 'user-dashboard-tab') updateUI();
+            }
+
+            link.parentElement.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
             link.classList.add('active');
-            if (link.dataset.target === 'admin-cc') renderAdminCC();
         });
     });
 
@@ -1317,6 +1338,115 @@ function setupEventListeners() {
         };
     });
 
+    // Admin: Registrar/Editar Convenio
+    document.getElementById('btn-add-partner')?.addEventListener('click', () => {
+        document.getElementById('partner-modal-title').innerText = "Registrar Convenio";
+        document.getElementById('partner-edit-id').value = "";
+        document.getElementById('partner-form').reset();
+        
+        // Reset logo elements
+        const modal = document.getElementById('partner-modal');
+        if (modal) {
+            delete modal.dataset.tempLogo;
+        }
+        const previewContainer = document.getElementById('partner-logo-preview-container');
+        if (previewContainer) previewContainer.style.display = 'none';
+        const previewImg = document.getElementById('partner-logo-preview');
+        if (previewImg) previewImg.src = '';
+        const logoName = document.getElementById('partner-logo-name');
+        if (logoName) logoName.innerText = "Toca para seleccionar imagen";
+
+        document.getElementById('partner-modal').classList.add('active');
+    });
+
+    // Drag & Drop / Seleccionar Logo de Convenio
+    const partnerLogoUploadZone = document.getElementById('partner-logo-upload-zone');
+    const partnerLogoFile = document.getElementById('partner-logo-file');
+    
+    partnerLogoUploadZone?.addEventListener('click', () => partnerLogoFile.click());
+    
+    partnerLogoUploadZone?.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        partnerLogoUploadZone.style.borderColor = 'var(--primary)';
+        partnerLogoUploadZone.style.background = 'hsla(var(--primary-h), var(--primary-s), var(--primary-l), 0.05)';
+    });
+    
+    partnerLogoUploadZone?.addEventListener('dragleave', () => {
+        partnerLogoUploadZone.style.borderColor = 'var(--border)';
+        partnerLogoUploadZone.style.background = 'white';
+    });
+    
+    partnerLogoUploadZone?.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        partnerLogoUploadZone.style.borderColor = 'var(--border)';
+        partnerLogoUploadZone.style.background = 'white';
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            await handlePartnerLogoFile(file);
+        }
+    });
+
+    partnerLogoFile?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            await handlePartnerLogoFile(file);
+        }
+    });
+
+    async function handlePartnerLogoFile(file) {
+        try {
+            const base64 = await window.DataManager.fileToBase64(file);
+            const modal = document.getElementById('partner-modal');
+            if (modal) modal.dataset.tempLogo = base64;
+            
+            const logoName = document.getElementById('partner-logo-name');
+            if (logoName) logoName.innerText = file.name;
+            
+            const preview = document.getElementById('partner-logo-preview');
+            if (preview) preview.src = base64;
+            
+            const previewContainer = document.getElementById('partner-logo-preview-container');
+            if (previewContainer) previewContainer.style.display = 'block';
+        } catch (err) {
+            console.error('Error al procesar la imagen:', err);
+            if (typeof toast === 'function') toast('Error al procesar la imagen', 'error');
+        }
+    }
+
+    document.getElementById('partner-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const editId = document.getElementById('partner-edit-id').value;
+        const id = editId || 'partner_' + Date.now();
+        const modal = document.getElementById('partner-modal');
+        const logoURL = modal ? (modal.dataset.tempLogo || null) : null;
+        
+        const partnerData = {
+            name: document.getElementById('partner-name').value,
+            category: document.getElementById('partner-category').value,
+            discountDetail: document.getElementById('partner-discount').value,
+            description: document.getElementById('partner-description').value,
+            type: document.getElementById('partner-type').value,
+            logoURL: logoURL,
+            active: document.getElementById('partner-active').value === 'true'
+        };
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.innerText = "Guardando...";
+
+        try {
+            await window.DataManager.savePartner(id, partnerData);
+            document.getElementById('partner-modal').classList.remove('active');
+            toast(editId ? 'Convenio actualizado' : 'Convenio creado');
+            renderAdminBenefits();
+        } catch (err) {
+            toast('Error al guardar', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Guardar Convenio";
+        }
+    });
+
     // Cerrar modal con tecla Escape
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -1732,3 +1862,324 @@ window.doManualCollection = async (userId, month, amount, userName, kids) => {
         toast('Error al registrar cobro manual', 'error');
     }
 };
+
+/**
+ * Módulo de Convenios y Club Correcaminos (PWA)
+ */
+
+window.isUserAlDia = async (userId) => {
+    try {
+        const user = await window.DataManager.getUser(userId);
+        if (!user) return false;
+        if (user.role === 'admin') return true;
+
+        const payments = (await window.DataManager.getPaymentsByUser(userId)) || [];
+
+        const now = new Date();
+        const allMonths = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        let currentMonthIndex = now.getMonth();
+        if (currentMonthIndex === 0) currentMonthIndex = 1;
+        const currentMonthName = allMonths[currentMonthIndex];
+
+        // Los meses activos del ciclo escolar son de Febrero a Diciembre
+        const monthsToCheck = ["Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        const idxCurrent = monthsToCheck.indexOf(currentMonthName);
+
+        // Si el mes actual no está en la lista de meses a controlar, o no hemos empezado el ciclo
+        if (idxCurrent === -1) return true;
+
+        // Verificar que todos los meses transcurridos del ciclo escolar hasta el mes actual tengan al menos un pago aprobado
+        for (let i = 0; i <= idxCurrent; i++) {
+            const m = monthsToCheck[i];
+            const hasApproved = payments.some(p => p && p.month === m && p.status === 'approved');
+            if (!hasApproved) {
+                return false; // Falta un pago aprobado para este mes
+            }
+        }
+
+        return true;
+    } catch (err) {
+        console.error("Error en isUserAlDia:", err);
+        return false;
+    }
+};
+
+async function renderUserBenefits() {
+    const container = document.getElementById('user-benefits-container');
+    if (!container) return;
+    container.innerHTML = '<div class="text-muted" style="grid-column:1/-1; text-align:center; padding:2rem;"><i class="fas fa-spinner fa-spin"></i> Cargando convenios...</div>';
+
+    try {
+        const partners = (await window.DataManager.getPartners()) || [];
+        const activePartners = partners.filter(p => p && (p.active === true || p.active === "true" || p.active === undefined));
+        
+        let alDia = false;
+        try {
+            alDia = await window.isUserAlDia(currentUser.id);
+        } catch (diagErr) {
+            console.error("Error inside isUserAlDia:", diagErr);
+        }
+
+        const myCoupons = (await window.DataManager.getCouponsByUser(currentUser.id)) || [];
+
+        container.innerHTML = '';
+        if (activePartners.length === 0) {
+            container.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; padding: 3rem 1rem; background: white; border-radius: 12px; border: 1px dashed var(--border);">
+                    <i class="fas fa-handshake" style="font-size: 2.5rem; color: #cbd5e0; margin-bottom: 1rem;"></i>
+                    <p style="color: #718096; font-weight: 500;">Próximamente verás convenios y descuentos en esta sección.</p>
+                    <p style="color: #cbd5e0; font-size: 0.75rem; margin-top: 0.5rem;">Cero convenios activos encontrados en la base de datos.</p>
+                </div>
+            `;
+            return;
+        }
+
+        activePartners.forEach(p => {
+            const isOnce = p.type === 'once';
+            const alreadyUsed = isOnce && myCoupons.some(c => c && c.partnerId === p.id && c.status === 'used');
+            const hasActiveCoupon = myCoupons.some(c => c && c.partnerId === p.id && c.status === 'active' && c.expiresAt > Date.now());
+            const activeCoupon = hasActiveCoupon ? myCoupons.find(c => c && c.partnerId === p.id && c.status === 'active' && c.expiresAt > Date.now()) : null;
+
+            const card = document.createElement('div');
+            card.className = 'athlete-card benefit-card';
+            if (!alDia || alreadyUsed) card.classList.add('incomplete');
+
+            const logo = p.logoURL ? p.logoURL : 'img/Nuevo Logo Correcaminos.jpeg';
+
+            let actionBtnHtml = '';
+            if (alreadyUsed) {
+                actionBtnHtml = `<button class="btn-primary" style="background:#cbd5e0; color:#718096; cursor:not-allowed; width:100%;" disabled><i class="fas fa-check-circle"></i> Beneficio Canjeado</button>`;
+            } else if (!alDia) {
+                actionBtnHtml = `
+                    <button class="btn-primary" style="background:#fee2e2; color:#ef4444; border:1px solid #fec2c2; cursor:not-allowed; width:100%;" disabled>
+                        <i class="fas fa-lock"></i> Regularizar Cuenta
+                    </button>
+                    <p style="font-size:0.7rem; color:var(--danger); text-align:center; margin-top:0.5rem; font-weight:600;">Requiere estar Al Día en tus cuotas</p>
+                `;
+            } else if (activeCoupon) {
+                actionBtnHtml = `
+                    <button class="btn-secondary btn-view-active-coupon" data-code="${activeCoupon.id}" data-partner-name="${p.name}" data-discount="${p.discountDetail}" data-desc="${p.description}" style="width:100%;">
+                        <i class="fas fa-qrcode"></i> Ver Cupón Activo
+                    </button>
+                `;
+            } else {
+                actionBtnHtml = `
+                    <button class="btn-primary btn-generate-coupon" data-partner-id="${p.id}" style="width:100%;">
+                        <i class="fas fa-gift"></i> Obtener Cupón
+                    </button>
+                `;
+            }
+
+            card.innerHTML = `
+                <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem;">
+                    <img src="${logo}" alt="${p.name}" style="width:50px; height:50px; border-radius:12px; object-fit:cover; border:1px solid var(--border);">
+                    <div>
+                        <h4 style="color:var(--primary); font-size:1.05rem; margin:0; line-height:1.2;">${p.name}</h4>
+                        <span class="badge" style="background:var(--primary-light); color:white; font-size:0.7rem; padding:0.15rem 0.5rem; display:inline-block; margin-top:0.25rem;">
+                            ${p.category || 'Rubro'}
+                        </span>
+                    </div>
+                </div>
+                <div class="athlete-card-body" style="flex:1;">
+                    <div style="font-size:1.5rem; font-weight:800; color:var(--accent); margin:0.5rem 0;">${p.discountDetail || 'Descuento'}</div>
+                    <p style="font-size:0.85rem; color:var(--text-main); margin-bottom:1rem;">${p.description || ''}</p>
+                    <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:1rem;">
+                        <i class="fas fa-sync-alt"></i> ${isOnce ? 'Descuento por única vez' : 'Descuento recurrente'}
+                    </span>
+                </div>
+                <div style="margin-top:auto;">
+                    ${actionBtnHtml}
+                </div>
+            `;
+            container.appendChild(card);
+        });
+
+        container.querySelectorAll('.btn-generate-coupon').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const partnerId = btn.dataset.partnerId;
+                handleCreateCoupon(partnerId);
+            });
+        });
+
+        container.querySelectorAll('.btn-view-active-coupon').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const code = btn.dataset.code;
+                const partnerName = btn.dataset.partnerName;
+                const discount = btn.dataset.discount;
+                const desc = btn.dataset.desc;
+                showCouponModal(code, partnerName, discount, desc);
+            });
+        });
+
+    } catch (e) {
+        console.error("Error al renderizar beneficios del socio:", e);
+        container.innerHTML = `
+            <div class="text-red" style="text-align:center; padding:2rem; grid-column: 1/-1;">
+                <i class="fas fa-exclamation-triangle" style="font-size:2.5rem; color:var(--danger); margin-bottom:1rem;"></i>
+                <p style="font-weight:600;">Ocurrió un error al cargar los convenios:</p>
+                <p style="font-family:monospace; font-size:0.85rem; margin-top:0.5rem; color:var(--danger); background:#fff5f5; padding:0.75rem; border:1px solid #fed7d7; border-radius:6px;">${e.message}</p>
+            </div>
+        `;
+    }
+}
+
+async function handleCreateCoupon(partnerId) {
+    const isAlDia = await window.isUserAlDia(currentUser.id);
+    if (!isAlDia) {
+        toast("No podés generar cupones si registrás deudas pendientes.", "error");
+        return;
+    }
+
+    if (!confirm("¿Deseás generar este cupón de descuento?\n\nTendrá una validez de 24 horas.")) return;
+
+    try {
+        const code = generateCouponCode();
+        const partners = await window.DataManager.getPartners();
+        const p = partners.find(x => x.id === partnerId);
+        if (!p) return;
+
+        const newCoupon = {
+            id: code,
+            userId: currentUser.id,
+            partnerId: partnerId,
+            createdAt: Date.now(),
+            expiresAt: Date.now() + (24 * 60 * 60 * 1000),
+            status: 'active',
+            usedAt: null
+        };
+
+        await window.DataManager.createCoupon(newCoupon);
+        toast("Cupón generado con éxito");
+        renderUserBenefits();
+        showCouponModal(code, p.name, p.discountDetail, p.description);
+
+    } catch (e) {
+        console.error(e);
+        toast("Error al generar cupón", "error");
+    }
+}
+
+function generateCouponCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let result = 'CC-';
+    for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+function showCouponModal(code, partnerName, discount, desc) {
+    document.getElementById('coupon-partner-name').innerText = partnerName;
+    document.getElementById('coupon-discount-value').innerText = discount;
+    document.getElementById('coupon-benefit-desc').innerText = desc;
+    document.getElementById('coupon-code-text').innerText = code;
+
+    const origin = window.location.origin + window.location.pathname.replace('index.html', '');
+    const validationUrl = `${origin}validar.html?code=${code}`;
+    
+    const qrImg = document.getElementById('coupon-qr-img');
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(validationUrl)}`;
+
+    document.getElementById('coupon-modal').classList.add('active');
+}
+
+async function renderAdminBenefits() {
+    const tbody = document.querySelector('#admin-partners-table tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="6" align="center">Cargando convenios...</td></tr>';
+
+    try {
+        const partners = await window.DataManager.getPartners();
+        tbody.innerHTML = '';
+
+        if (partners.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" align="center">No hay convenios registrados. Presioná "Nuevo Convenio" para comenzar.</td></tr>';
+            return;
+        }
+
+        partners.forEach(p => {
+            const isOnce = p.type === 'once';
+            const isActive = p.active === true || p.active === "true" || p.active === undefined;
+            const logo = p.logoURL ? p.logoURL : 'img/Nuevo Logo Correcaminos.jpeg';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>
+                    <div style="display:flex; align-items:center; gap:0.75rem;">
+                        <img src="${logo}" alt="${p.name}" style="width:36px; height:36px; border-radius:6px; object-fit:cover; border:1px solid var(--border);">
+                        <b>${p.name}</b>
+                    </div>
+                </td>
+                <td><span class="badge" style="background:#f1f5f9; color:var(--text-main); border:1px solid var(--border);">${p.category}</span></td>
+                <td><b style="color:var(--accent);">${p.discountDetail}</b></td>
+                <td>${isOnce ? 'Única vez' : 'Recurrente'}</td>
+                <td>
+                    <span class="badge ${isActive ? 'badge-approved' : 'badge-pending'}">
+                        ${isActive ? 'Activo' : 'Pausado'}
+                    </span>
+                </td>
+                <td>
+                    <div style="display:flex; gap:0.5rem">
+                        <button class="btn-action edit btn-edit-partner" data-id="${p.id}" title="Editar Convenio"><i class="fas fa-edit"></i></button>
+                        <button class="btn-action reject btn-del-partner" data-id="${p.id}" title="Eliminar Convenio" style="color:var(--danger)"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        tbody.querySelectorAll('.btn-edit-partner').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const partner = partners.find(x => x.id === btn.dataset.id);
+                if (partner) openEditPartnerModal(partner);
+            });
+        });
+
+        tbody.querySelectorAll('.btn-del-partner').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (confirm('¿Eliminar convenio de forma permanente?')) {
+                    await window.DataManager.deletePartner(btn.dataset.id);
+                    toast('Convenio eliminado');
+                    renderAdminBenefits();
+                }
+            });
+        });
+
+    } catch (e) {
+        console.error(e);
+        tbody.innerHTML = '<tr><td colspan="6" align="center" style="color:var(--danger)">Error al cargar datos.</td></tr>';
+    }
+}
+
+function openEditPartnerModal(p) {
+    const modal = document.getElementById('partner-modal');
+    if (modal) {
+        modal.dataset.tempLogo = p.logoURL || '';
+    }
+
+    document.getElementById('partner-modal-title').innerText = "Editar Convenio";
+    document.getElementById('partner-edit-id').value = p.id;
+    document.getElementById('partner-name').value = p.name;
+    document.getElementById('partner-category').value = p.category;
+    document.getElementById('partner-discount').value = p.discountDetail;
+    document.getElementById('partner-description').value = p.description;
+    document.getElementById('partner-type').value = p.type;
+    
+    const previewContainer = document.getElementById('partner-logo-preview-container');
+    const previewImg = document.getElementById('partner-logo-preview');
+    const logoName = document.getElementById('partner-logo-name');
+    
+    if (p.logoURL) {
+        if (previewImg) previewImg.src = p.logoURL;
+        if (previewContainer) previewContainer.style.display = 'block';
+        if (logoName) logoName.innerText = "Imagen cargada (toca para cambiar)";
+    } else {
+        if (previewImg) previewImg.src = '';
+        if (previewContainer) previewContainer.style.display = 'none';
+        if (logoName) logoName.innerText = "Toca para seleccionar imagen";
+    }
+
+    document.getElementById('partner-active').value = String(p.active !== false);
+    
+    modal.classList.add('active');
+}

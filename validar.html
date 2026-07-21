@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validador de Cupones - Correcaminos</title>
+    <!-- Google Fonts & FontAwesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- CSS Estilizado con Glassmorphism -->
+    <style>
+        :root {
+            --primary: #1a365d;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --bg-main: #f8fafc;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --radius: 1.25rem;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1a365d 0%, #1e3a8a 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            color: var(--text-main);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 440px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: var(--radius);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            padding: 2.5rem 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .logo-header {
+            margin-bottom: 2rem;
+        }
+
+        .logo-header img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 3px solid var(--warning);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            object-fit: cover;
+            margin-bottom: 0.75rem;
+        }
+
+        .logo-header h1 {
+            font-size: 1.4rem;
+            color: var(--primary);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .logo-header p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        /* Formulario Manual */
+        .form-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--primary);
+        }
+
+        .input-code {
+            width: 100%;
+            padding: 0.85rem 1rem;
+            border: 2px solid var(--border);
+            border-radius: 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: center;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .input-code:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.85rem;
+            border: none;
+            border-radius: 0.75rem;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1e40af;
+            transform: translateY(-1px);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            margin-top: 1rem;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(0, 0, 0, 0.02);
+            color: var(--text-main);
+        }
+
+        /* Estados de Validación */
+        .status-card {
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        .status-card i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .status-valid {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            color: #065f46;
+        }
+
+        .status-invalid {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+        }
+
+        .coupon-detail {
+            margin: 1.25rem 0;
+            padding: 1rem 0;
+            border-top: 1px dashed rgba(0,0,0,0.1);
+            border-bottom: 1px dashed rgba(0,0,0,0.1);
+            text-align: left;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .coupon-detail div {
+            margin-bottom: 0.5rem;
+        }
+
+        .coupon-detail strong {
+            color: var(--primary);
+        }
+
+        .spinner {
+            font-size: 2rem;
+            color: var(--primary);
+            animation: spin 1s linear infinite;
+            margin: 2rem 0;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
+
+    <!-- Firebase SDK Compat -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
+    <!-- Traductores de Firebase y Scripts locales -->
+    <script>
+        const _realFirebase = window.firebase;
+        window.firebase = {
+            app: { initializeApp: (config) => _realFirebase.initializeApp(config) },
+            firestore: {
+                getFirestore: (app) => _realFirebase.firestore(),
+                doc: (db, coll, id) => db.collection(coll).doc(id),
+                collection: (db, coll) => db.collection(coll),
+                getDoc: (docRef) => docRef.get(),
+                setDoc: (docRef, data) => docRef.set(data),
+                updateDoc: (docRef, data) => docRef.update(data),
+                getDocs: (query) => query.get()
+            }
+        };
+    </script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/data.js"></script>
+</head>
+<body>
+
+    <div class="container" id="app-container">
+        <div class="logo-header">
+            <img src="img/Nuevo Logo Correcaminos.jpeg" alt="Logo Correcaminos">
+            <h1>Club Correcaminos</h1>
+            <p>Validador Oficial de Beneficios</p>
+        </div>
+
+        <!-- Vista de Carga -->
+        <div id="view-loading" style="display: none;">
+            <i class="fas fa-spinner spinner"></i>
+            <p style="font-weight: 500;">Validando cupón con la base de datos...</p>
+        </div>
+
+        <!-- Vista del Formulario Manual -->
+        <div id="view-manual">
+            <form id="manual-form">
+                <div class="form-group">
+                    <label for="code-input">Ingresá el Código del Cupón</label>
+                    <input type="text" id="code-input" class="input-code" placeholder="CC-XXXXXX" required autocomplete="off">
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search"></i> Validar Cupón
+                </button>
+            </form>
+        </div>
+
+        <!-- Vista de Resultados -->
+        <div id="view-result" style="display: none;">
+            <!-- Renderizado dinámico del estado -->
+            <div id="result-status-container"></div>
+            
+            <button id="btn-action-redeem" class="btn btn-success" style="display: none;">
+                <i class="fas fa-check-double"></i> Confirmar y Canjear Descuento
+            </button>
+
+            <button id="btn-validate-another" class="btn btn-secondary">
+                Validar otro código
+            </button>
+        </div>
+    </div>
+
+    <!-- Inicialización y Lógica de validación -->
+    <script>
+        let db = null;
+        let activeCoupon = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Inicializar base de datos
+            try {
+                const app = window.firebase.app.initializeApp(window.firebaseConfig);
+                db = window.firebase.firestore.getFirestore(app);
+                window.DataManager.init(db);
+            } catch (e) {
+                console.error("Error inicializando Firebase en validador:", e);
+                alert("Error de conexión. Asegúrate de tener conexión a Internet.");
+            }
+
+            // Comprobar si viene código por URL (?code=...)
+            const urlParams = new URLSearchParams(window.location.search);
+            const codeParam = urlParams.get('code');
+            if (codeParam) {
+                validateCode(codeParam.trim().toUpperCase());
+            }
+
+            // Evento manual
+            document.getElementById('manual-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const codeVal = document.getElementById('code-input').value.trim().toUpperCase();
+                if (codeVal) {
+                    validateCode(codeVal);
+                }
+            });
+
+            document.getElementById('btn-validate-another').addEventListener('click', () => {
+                // Limpiar URL y volver al formulario
+                window.history.replaceState({}, document.title, window.location.pathname);
+                document.getElementById('view-result').style.display = 'none';
+                document.getElementById('view-manual').style.display = 'block';
+                document.getElementById('code-input').value = '';
+                activeCoupon = null;
+            });
+
+            document.getElementById('btn-action-redeem').addEventListener('click', async () => {
+                if (!activeCoupon) return;
+                const btn = document.getElementById('btn-action-redeem');
+                btn.disabled = true;
+                btn.innerText = "Canjeando...";
+
+                try {
+                    await window.DataManager.updateCoupon(activeCoupon.id, {
+                        status: 'used',
+                        usedAt: Date.now()
+                    });
+                    
+                    alert("✅ Descuento registrado y canjeado con éxito.");
+                    
+                    // Volver a validar para renderizar estado actualizado
+                    validateCode(activeCoupon.id);
+                } catch(e) {
+                    alert("Ocurrió un error al procesar el canje.");
+                    btn.disabled = false;
+                    btn.innerText = "Confirmar y Canjear Descuento";
+                }
+            });
+        });
+
+        async function validateCode(code) {
+            showView('loading');
+            document.getElementById('btn-action-redeem').style.display = 'none';
+
+            try {
+                const coupon = await window.DataManager.getCoupon(code);
+                if (!coupon) {
+                    renderResult(false, "El cupón ingresado no existe o es inválido.");
+                    return;
+                }
+
+                activeCoupon = coupon;
+
+                // Cargar datos complementarios
+                const partner = await window.DataManager.db ? 
+                    (await window.firebase.firestore.getDoc(window.firebase.firestore.doc(db, "partners", coupon.partnerId))).data() : null;
+                const user = await window.DataManager.getUser(coupon.userId);
+
+                const partnerName = partner ? partner.name : "Comercio Asociado";
+                const discount = partner ? partner.discountDetail : "Beneficio Club";
+                const partnerType = partner ? partner.type : "recurring";
+                const userName = user ? user.name : "Socio de Correcaminos";
+
+                // Validaciones de caducidad
+                if (coupon.status === 'used') {
+                    renderResult(false, `Este cupón ya fue utilizado.`, {
+                        code, partnerName, userName, discount,
+                        date: new Date(coupon.usedAt || coupon.createdAt).toLocaleDateString('es-AR')
+                    }, "YA CANJEADO");
+                    return;
+                }
+
+                if (coupon.expiresAt < Date.now()) {
+                    renderResult(false, `Este cupón ha vencido (validez de 24 horas superada).`, {
+                        code, partnerName, userName, discount,
+                        date: new Date(coupon.expiresAt).toLocaleDateString('es-AR')
+                    }, "VENCIDO");
+                    return;
+                }
+
+                // Si todo está bien: Cupón Válido
+                renderResult(true, "Cupón verificado con éxito. Válido para aplicar el descuento.", {
+                    code, partnerName, userName, discount,
+                    expires: new Date(coupon.expiresAt).toLocaleString('es-AR')
+                });
+
+                // Si es de un solo uso, habilitar botón de canje
+                if (partnerType === 'once') {
+                    document.getElementById('btn-action-redeem').style.display = 'block';
+                }
+
+            } catch (e) {
+                console.error(e);
+                renderResult(false, "Error de red al conectar con Firestore. Intente nuevamente.");
+            }
+        }
+
+        function showView(view) {
+            document.getElementById('view-manual').style.display = view === 'manual' ? 'block' : 'none';
+            document.getElementById('view-loading').style.display = view === 'loading' ? 'block' : 'none';
+            document.getElementById('view-result').style.display = view === 'result' ? 'block' : 'none';
+        }
+
+        function renderResult(isValid, message, details = null, customBadge = null) {
+            showView('result');
+            const container = document.getElementById('result-status-container');
+            
+            if (isValid) {
+                container.innerHTML = `
+                    <div class="status-card status-valid">
+                        <i class="fas fa-check-circle"></i>
+                        <h2>Cupón Válido</h2>
+                        <p style="font-size:0.9rem; margin-top:0.25rem;">${message}</p>
+                    </div>
+                    <div class="coupon-detail">
+                        <div><strong>Código:</strong> ${details.code}</div>
+                        <div><strong>Comercio:</strong> ${details.partnerName}</div>
+                        <div><strong>Beneficio:</strong> <span style="font-weight:700; color:var(--success);">${details.discount}</span></div>
+                        <div><strong>Socio:</strong> ${details.userName}</div>
+                        <div><strong>Vence:</strong> ${details.expires}</div>
+                    </div>
+                `;
+            } else {
+                let detailsHtml = '';
+                if (details) {
+                    detailsHtml = `
+                        <div class="coupon-detail">
+                            <div><strong>Código:</strong> ${details.code}</div>
+                            <div><strong>Comercio:</strong> ${details.partnerName}</div>
+                            <div><strong>Beneficio:</strong> ${details.discount}</div>
+                            <div><strong>Socio:</strong> ${details.userName}</div>
+                        </div>
+                    `;
+                }
+                
+                container.innerHTML = `
+                    <div class="status-card status-invalid">
+                        <i class="fas fa-times-circle"></i>
+                        <h2>Cupón No Válido</h2>
+                        <p style="font-size:0.9rem; margin-top:0.25rem; font-weight: 600;">${customBadge || 'INVÁLIDO'}</p>
+                        <p style="font-size:0.85rem; margin-top:0.5rem; opacity:0.9;">${message}</p>
+                    </div>
+                    ${detailsHtml}
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

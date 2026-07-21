@@ -1,6 +1,29 @@
-/**
- * auth.js - Sistema de Acceso con Detección de Fallos
- */
+function safeSetSession(key, data) {
+    try {
+        localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+        console.warn("localStorage cuota excedida al guardar sesión. Limpiando cachés grandes...", e);
+        try {
+            // Intentar liberar espacio eliminando imágenes/cachés pesadas en localStorage si las hay
+            localStorage.removeItem('correcaminos_payments');
+            localStorage.setItem(key, JSON.stringify(data));
+        } catch (err) {
+            // Si aun así falla (p.ej. por imágenes pesadas dentro del propio objeto user), guardar versión aligerada
+            try {
+                const lightData = { ...data };
+                if (lightData.children) {
+                    lightData.children = lightData.children.map(c => ({
+                        ...c,
+                        medicalCertURL: c.medicalCertURL ? '[Cargado en Nube]' : null
+                    }));
+                }
+                localStorage.setItem(key, JSON.stringify(lightData));
+            } catch (errFinal) {
+                console.error("No se pudo guardar sesión en localStorage:", errFinal);
+            }
+        }
+    }
+}
 
 const Auth = {
     db: null,
@@ -16,7 +39,7 @@ const Auth = {
         // Admin estático por si falla la nube
         if (usernameInput === 'admin' && password === 'admin123') {
             const admin = { id: 'local_admin', username: 'admin', role: 'admin', name: 'Administrador' };
-            localStorage.setItem('correcaminos_session', JSON.stringify(admin));
+            safeSetSession('correcaminos_session', admin);
             return { success: true, user: admin };
         }
 
@@ -32,7 +55,7 @@ const Auth = {
                     const data = docSnap.data();
                     if (String(data.password) === String(password)) {
                         const session = { id: slugId, ...data };
-                        localStorage.setItem('correcaminos_session', JSON.stringify(session));
+                        safeSetSession('correcaminos_session', session);
                         return { success: true, user: session };
                     }
                 }
@@ -53,12 +76,19 @@ const Auth = {
                 });
 
                 if (cloudUser) {
-                    localStorage.setItem('correcaminos_session', JSON.stringify(cloudUser));
+                    safeSetSession('correcaminos_session', cloudUser);
                     return { success: true, user: cloudUser };
                 }
 
             } catch (e) {
                 console.error("Error Firebase Auth:", e);
+                if (e.name === 'QuotaExceededError' || e.message?.includes('exceeded the quota')) {
+                    // Si llega aquí un QuotaExceededError inesperado
+                    try {
+                        localStorage.clear();
+                    } catch (errClear) {}
+                    return { success: false, message: "La memoria del navegador estaba llena. Hemos limpiado el espacio. Por favor intenta ingresar de nuevo." };
+                }
                 if (e.code === 'permission-denied') {
                     return { success: false, message: "Error: No tienes permisos en Firebase. Revisa las REGLAS de tu base de datos (paso 3B)." };
                 }
@@ -70,7 +100,7 @@ const Auth = {
         const locals = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
         const local = locals.find(u => (u.username === usernameInput || u.id === slugId) && u.password === password);
         if (local) {
-            localStorage.setItem('correcaminos_session', JSON.stringify(local));
+            safeSetSession('correcaminos_session', local);
             return { success: true, user: local };
         }
 

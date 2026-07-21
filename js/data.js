@@ -199,6 +199,122 @@ const DataManager = {
             r.onload = () => res(r.result);
             r.onerror = e => rej(e);
         });
+    },
+
+    /**
+     * Convenios (Partners)
+     */
+    async getPartners() {
+        if (this.db) {
+            try {
+                const q = window.firebase.firestore.collection(this.db, "partners");
+                const snapshot = await window.firebase.firestore.getDocs(q);
+                const cloudPartners = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                localStorage.setItem('correcaminos_partners', JSON.stringify(cloudPartners));
+                return cloudPartners;
+            } catch (e) {
+                console.warn("Error leyendo convenios de nube, usando locales.", e);
+            }
+        }
+        return JSON.parse(localStorage.getItem('correcaminos_partners') || '[]');
+    },
+
+    async savePartner(id, partnerData) {
+        const finalData = { ...partnerData, id: id, lastUpdate: Date.now() };
+        if (this.db) {
+            try {
+                const docRef = window.firebase.firestore.doc(this.db, "partners", id);
+                await window.firebase.firestore.setDoc(docRef, finalData);
+            } catch (e) {
+                console.error("Error al guardar convenio en la nube:", e);
+                throw e;
+            }
+        }
+        const partners = JSON.parse(localStorage.getItem('correcaminos_partners') || '[]');
+        const idx = partners.findIndex(p => p.id === id);
+        if (idx > -1) partners[idx] = finalData;
+        else partners.push(finalData);
+        localStorage.setItem('correcaminos_partners', JSON.stringify(partners));
+    },
+
+    async deletePartner(id) {
+        if (this.db) {
+            try {
+                const docRef = window.firebase.firestore.doc(this.db, "partners", id);
+                await window.firebase.firestore.deleteDoc(docRef);
+            } catch (e) {
+                console.error("Error borrar convenio en nube:", e);
+                throw e;
+            }
+        }
+        let partners = JSON.parse(localStorage.getItem('correcaminos_partners') || '[]');
+        partners = partners.filter(p => p.id !== id);
+        localStorage.setItem('correcaminos_partners', JSON.stringify(partners));
+    },
+
+    /**
+     * Cupones (Coupons)
+     */
+    async createCoupon(coupon) {
+        if (this.db) {
+            try {
+                const docRef = window.firebase.firestore.doc(this.db, "coupons", coupon.id);
+                await window.firebase.firestore.setDoc(docRef, coupon);
+            } catch (e) {
+                console.error("Error al registrar cupón en la nube:", e);
+                throw e;
+            }
+        }
+        const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
+        coupons.push(coupon);
+        localStorage.setItem('correcaminos_coupons', JSON.stringify(coupons));
+    },
+
+    async getCoupon(couponId) {
+        if (this.db) {
+            try {
+                const docRef = window.firebase.firestore.doc(this.db, "coupons", couponId);
+                const docSnap = await window.firebase.firestore.getDoc(docRef);
+                if (docSnap.exists) return { id: docSnap.id, ...docSnap.data() };
+            } catch (e) {
+                console.error("Error al leer cupón en la nube:", e);
+            }
+        }
+        const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
+        return coupons.find(c => c.id === couponId);
+    },
+
+    async getCouponsByUser(userId) {
+        if (this.db) {
+            try {
+                const q = window.firebase.firestore.collection(this.db, "coupons");
+                const snapshot = await window.firebase.firestore.getDocs(q);
+                const allCoupons = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const userCoupons = allCoupons.filter(c => c.userId === userId);
+                localStorage.setItem('correcaminos_coupons', JSON.stringify(allCoupons));
+                return userCoupons;
+            } catch (e) {
+                console.warn("Error leyendo cupones de nube, usando locales.", e);
+            }
+        }
+        const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
+        return coupons.filter(c => c.userId === userId);
+    },
+
+    async updateCoupon(couponId, updates) {
+        if (this.db) {
+            try {
+                const docRef = window.firebase.firestore.doc(this.db, "coupons", couponId);
+                await window.firebase.firestore.updateDoc(docRef, updates);
+            } catch (e) {
+                console.error("Error al actualizar cupón en nube:", e);
+                throw e;
+            }
+        }
+        const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
+        const c = coupons.find(x => x.id === couponId);
+        if (c) Object.assign(c, updates);
+        localStorage.setItem('correcaminos_coupons', JSON.stringify(coupons));
     }
 };
 

@@ -162,6 +162,16 @@
                             <span class="brand-sub">Escuela de Atletismo Correcaminos</span>
                         </div>
                     </div>
+                    <div class="nav-menu">
+                        <button class="nav-link active" data-target="user-dashboard-tab">
+                            <i class="fas fa-home"></i>
+                            <span>Mi Perfil</span>
+                        </button>
+                        <button class="nav-link" data-target="user-benefits-tab">
+                            <i class="fas fa-gift"></i>
+                            <span>Beneficios</span>
+                        </button>
+                    </div>
                     <div class="nav-user">
                         <div id="db-status" class="db-status" title="Estado de la base de datos">
                             <i class="fas fa-circle"></i> <span id="db-status-text">Conectando...</span>
@@ -175,10 +185,12 @@
             </nav>
 
             <main class="container">
-                <header class="dashboard-header">
-                    <h2>Mi Perfil</h2>
-                    <p>Gestiona los pagos de tu hijo/a</p>
-                </header>
+                <!-- Pestaña Principal del Socio -->
+                <div id="user-dashboard-tab" class="user-tab active">
+                    <header class="dashboard-header">
+                        <h2>Mi Perfil</h2>
+                        <p>Gestiona los pagos de tu hijo/a</p>
+                    </header>
 
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -265,6 +277,18 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Pestaña de Beneficios y Convenios del Socio -->
+            <div id="user-benefits-tab" class="user-tab">
+                    <header class="dashboard-header">
+                        <h2>Club Correcaminos</h2>
+                        <p>Descuentos y beneficios exclusivos para socios al día</p>
+                    </header>
+                    <div id="user-benefits-container" class="athletes-grid">
+                        <!-- Se cargará dinámicamente -->
+                    </div>
+                </div>
             </main>
         </section>
 
@@ -295,6 +319,10 @@
                         <button class="nav-link" data-target="admin-config">
                             <i class="fas fa-cogs"></i>
                             <span>Config</span>
+                        </button>
+                        <button class="nav-link" data-target="admin-benefits">
+                            <i class="fas fa-handshake"></i>
+                            <span>Convenios</span>
                         </button>
                     </div>
                     <div class="nav-user">
@@ -562,6 +590,40 @@
                                 <button id="btn-save-activities" class="btn-primary" style="margin-top: 1rem;">Guardar
                                     Actividades</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pestaña de Gestión de Convenios (Admin) -->
+                <div id="admin-benefits" class="admin-tab">
+                    <header class="dashboard-header">
+                        <div class="header-left">
+                            <h2>Gestión de Convenios</h2>
+                            <p>Administra los comercios adheridos y beneficios</p>
+                        </div>
+                        <div class="header-right">
+                            <button class="btn-primary" id="btn-add-partner">
+                                <i class="fas fa-plus"></i> Nuevo Convenio
+                            </button>
+                        </div>
+                    </header>
+                    <div class="card">
+                        <div class="table-responsive">
+                            <table id="admin-partners-table">
+                                <thead>
+                                    <tr>
+                                        <th>Comercio</th>
+                                        <th>Categoría</th>
+                                        <th>Descuento</th>
+                                        <th>Frecuencia</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Se cargará dinámicamente -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -938,6 +1000,100 @@
 
         <!-- Toast Notifications -->
         <div id="toast-container"></div>
+
+        <!-- Modal Nuevo/Editar Convenio (Admin) -->
+        <div id="partner-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="partner-modal-title">Registrar Convenio</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <form id="partner-form">
+                    <input type="hidden" id="partner-edit-id">
+                    <div class="form-group">
+                        <label for="partner-name">Nombre del Comercio</label>
+                        <input type="text" id="partner-name" placeholder="Ej: Centro de Entrenamiento Punto Activo" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="partner-category">Categoría</label>
+                        <select id="partner-category" required>
+                            <option value="Gimnasios">Gimnasios / Entrenamiento</option>
+                            <option value="Indumentaria">Indumentaria y Calzado</option>
+                            <option value="Salud">Salud y Nutrición</option>
+                            <option value="Otros">Otros Rubros</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="partner-discount">Detalle del Descuento</label>
+                        <input type="text" id="partner-discount" placeholder="Ej: 10% de Descuento" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="partner-description">Descripción / Condiciones</label>
+                        <textarea id="partner-description" rows="3" placeholder="Ej: Válido abonando en efectivo sobre el pase libre mensual." required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="partner-type">Frecuencia del Beneficio</label>
+                        <select id="partner-type" required>
+                            <option value="recurring">Uso Constante (Generación ilimitada)</option>
+                            <option value="once">Uso Único (Por única vez para el socio)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="partner-logo-file">Logo del Comercio (Imagen PNG/JPG)</label>
+                        <div class="file-upload" id="partner-logo-upload-zone" style="background: white; border: 1px dashed var(--border); padding: 1.25rem; text-align: center; cursor: pointer; border-radius: 8px;">
+                            <i class="fas fa-image" style="font-size: 1.5rem; color: var(--primary); margin-bottom: 0.5rem;"></i>
+                            <p id="partner-logo-name">Toca para seleccionar imagen</p>
+                            <input type="file" id="partner-logo-file" accept="image/*" hidden>
+                        </div>
+                        <div id="partner-logo-preview-container" style="margin-top: 0.5rem; display: none; text-align: center;">
+                            <img id="partner-logo-preview" src="" alt="Vista previa" style="max-height: 70px; border-radius: 6px; border: 1px solid var(--border); object-fit: contain;">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="partner-active">Estado</label>
+                        <select id="partner-active">
+                            <option value="true">Activo</option>
+                            <option value="false">Pausado</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-text close-modal">Cancelar</button>
+                        <button type="submit" class="btn-primary">Guardar Convenio</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal para Mostrar Cupón Generado (Socio) -->
+        <div id="coupon-modal" class="modal">
+            <div class="modal-content" style="max-width: 420px; padding: 1.5rem;">
+                <div class="modal-header">
+                    <h3>Mi Cupón de Descuento</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body" style="text-align: center;">
+                    <div class="coupon-badge" style="background: var(--primary); color: white; padding: 1.5rem; border-radius: var(--radius-lg); box-shadow: var(--shadow-md); margin-bottom: 1.5rem;">
+                        <h4 id="coupon-partner-name" style="margin-bottom: 0.25rem; font-size: 1.2rem;">Comercio</h4>
+                        <span id="coupon-discount-value" style="font-size: 1.75rem; font-weight: 800; color: var(--accent); display: block; margin: 0.5rem 0;">10% OFF</span>
+                        <p id="coupon-benefit-desc" style="font-size: 0.85rem; opacity: 0.9;">Detalles del beneficio</p>
+                    </div>
+                    
+                    <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 1rem;">Mostrá este código en el local o escaneá el código QR:</p>
+                    
+                    <div style="background: white; padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border); display: inline-block; margin-bottom: 1rem; box-shadow: var(--shadow-sm);">
+                        <img id="coupon-qr-img" src="" alt="Código QR de Validación" style="width: 180px; height: 180px; display: block; margin: 0 auto 0.75rem auto;">
+                        <span id="coupon-code-text" style="font-family: monospace; font-size: 1.5rem; font-weight: 700; color: var(--primary); letter-spacing: 2px;">CC-XXXXXX</span>
+                    </div>
+                    
+                    <p class="text-xs" style="color: var(--text-muted); line-height: 1.4; padding: 0 1rem;">
+                        <i class="fas fa-info-circle"></i> Este cupón es personal e intransferible. Vence en 24 horas y requiere que el comercio valide la operación.
+                    </p>
+                </div>
+                <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: center;">
+                    <button type="button" class="btn-primary close-modal" style="width: 100%;">Cerrar</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Scripts (Cargados en orden sin módulos) -->

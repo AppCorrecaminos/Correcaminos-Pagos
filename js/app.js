@@ -713,25 +713,29 @@ function setupEventListeners() {
 
     // Navegación General (Admin y Socio)
     document.querySelectorAll('.nav-link').forEach(link => {
-        link.addEventListener('click', () => {
+        link.addEventListener('click', (e) => {
             const targetId = link.dataset.target;
             const targetEl = document.getElementById(targetId);
             if (!targetEl) return;
 
+            // 1. Cambiar visualmente de pestaña de forma instantánea sin esperar a la red (0 ms delay)
             if (targetEl.classList.contains('admin-tab')) {
                 document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
                 targetEl.classList.add('active');
-                if (targetId === 'admin-cc') renderAdminCC();
-                if (targetId === 'admin-benefits') renderAdminBenefits();
             } else if (targetEl.classList.contains('user-tab')) {
                 document.querySelectorAll('.user-tab').forEach(t => t.classList.remove('active'));
                 targetEl.classList.add('active');
-                if (targetId === 'user-benefits-tab') renderUserBenefits();
-                if (targetId === 'user-dashboard-tab') updateUI();
             }
 
             link.parentElement.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
             link.classList.add('active');
+
+            // 2. Cargar/Actualizar datos en segundo plano de manera asíncrona no bloqueante
+            setTimeout(() => {
+                if (targetId === 'admin-cc') renderAdminCC();
+                else if (targetId === 'admin-benefits') renderAdminBenefits();
+                else if (targetId === 'user-benefits-tab') renderUserBenefits();
+            }, 10);
         });
     });
 

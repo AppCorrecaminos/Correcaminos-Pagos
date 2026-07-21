@@ -1207,21 +1207,28 @@ select {
         gap: 4px;
         font-size: 0.7rem;
         color: var(--text-muted);
-        width: 22%;
+        width: 48%;
         height: 100%;
         padding: 0.5rem 0;
         font-weight: 600;
-        transition: color 0.2s ease, transform 0.2s ease;
+        transition: color 0.15s ease, transform 0.15s ease;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+        cursor: pointer;
+    }
+    .nav-link:active {
+        transform: scale(0.92);
     }
     .nav-link i {
         font-size: 1.25rem;
-        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .nav-link.active {
         color: var(--primary);
     }
     .nav-link.active i {
-        transform: translateY(-3px) scale(1.15);
+        transform: translateY(-2px) scale(1.15);
         color: var(--primary-light);
     }
     .nav-link.active::after {

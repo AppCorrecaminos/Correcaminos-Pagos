@@ -18,6 +18,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- CSS -->
     <link rel="stylesheet" href="css/styles.css">
+    <!-- jsPDF & AutoTable para exportar reportes oficiales en PDF con logo -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
     <style>
         /* Activity Picker Styles */
         .activity-picker-list {
@@ -344,6 +347,11 @@
                             <h2>Reporte de Cobros</h2>
                             <p>Resumen mensual de todos los pagos realizados</p>
                         </div>
+                        <div class="header-right">
+                            <button id="btn-export-pdf-reports" class="btn-primary btn-sm" style="background: #1a365d; color: white;">
+                                <i class="fas fa-file-pdf"></i> Exportar Reporte PDF
+                            </button>
+                        </div>
                     </header>
 
                     <div class="stats-grid" id="admin-stats-grid">
@@ -436,20 +444,108 @@
                     </div>
                 </div>
 
+                <!-- Pestaña de Cuenta Corriente Global -->
                 <div id="admin-cc" class="admin-tab">
                     <header class="dashboard-header">
                         <div class="header-left">
-                            <h2>Cuenta Corriente</h2>
-                            <p>Estado de deudas y cobros (Mes actual y próximo)</p>
+                            <h2>Cuenta Corriente y Estado de Cuotas</h2>
+                            <p>Consulta rápidamente quiénes pagaron y quiénes adeudan en cada mes</p>
+                        </div>
+                        <div class="header-right">
+                            <button id="btn-export-pdf-cc" class="btn-primary btn-sm" style="background: #10b981; color: white;">
+                                <i class="fas fa-file-pdf"></i> Exportar Cuenta Corriente PDF
+                            </button>
                         </div>
                     </header>
+
+                    <!-- Filtros Rápidos e Inteligentes para el Administrador -->
+                    <div class="card" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+                        <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; flex: 1; min-width: 280px;">
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <label for="cc-month-filter" style="font-weight: 700; font-size: 0.85rem; color: var(--primary); white-space: nowrap;">
+                                        <i class="fas fa-calendar-alt"></i> Mes:
+                                    </label>
+                                    <select id="cc-month-filter" class="form-input-sm" style="padding: 0.5rem 0.75rem; font-weight: 700; border-radius: 8px; border: 2px solid var(--primary); color: var(--primary);">
+                                        <option value="ALL">🗓️ Todos los meses</option>
+                                        <option value="Febrero">Febrero</option>
+                                        <option value="Marzo">Marzo</option>
+                                        <option value="Abril">Abril</option>
+                                        <option value="Mayo">Mayo</option>
+                                        <option value="Junio">Junio</option>
+                                        <option value="Julio">Julio</option>
+                                        <option value="Agosto">Agosto</option>
+                                        <option value="Septiembre">Septiembre</option>
+                                        <option value="Octubre">Octubre</option>
+                                        <option value="Noviembre">Noviembre</option>
+                                        <option value="Diciembre">Diciembre</option>
+                                    </select>
+                                </div>
+
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <label for="cc-status-filter" style="font-weight: 700; font-size: 0.85rem; color: var(--primary); white-space: nowrap;">
+                                        <i class="fas fa-filter"></i> Estado:
+                                    </label>
+                                    <select id="cc-status-filter" class="form-input-sm" style="padding: 0.5rem 0.75rem; font-weight: 600; border-radius: 8px;">
+                                        <option value="ALL">Todos los estados</option>
+                                        <option value="DEBT">❌ Adeudan (Impagos)</option>
+                                        <option value="OK">✅ Al Día (Pagados)</option>
+                                        <option value="PENDING">⏳ Pendientes de Revisión</option>
+                                    </select>
+                                </div>
+
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <label for="cc-activity-filter" style="font-weight: 700; font-size: 0.85rem; color: var(--primary); white-space: nowrap;">
+                                        <i class="fas fa-running"></i> Actividad:
+                                    </label>
+                                    <select id="cc-activity-filter" class="form-input-sm" style="padding: 0.5rem 0.75rem; font-weight: 600; border-radius: 8px; border: 1px solid var(--border);">
+                                        <option value="ALL">Todas las actividades</option>
+                                        <option value="Infantiles">🏃 Infantiles</option>
+                                        <option value="Pre Competitivo">⚡ Pre Competitivo</option>
+                                        <option value="Competitivo">🏆 Competitivo</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style="flex: 1; min-width: 220px;">
+                                <input type="text" id="cc-search-input" placeholder="🔍 Buscar familia o socio..." class="input-code" style="font-size: 0.9rem; text-transform: none; letter-spacing: normal; text-align: left; padding: 0.5rem 0.75rem;">
+                            </div>
+                        </div>
+
+                        <!-- Tarjetas Resumen del Mes Seleccionado -->
+                        <div id="cc-summary-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px dashed var(--border);">
+                            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 0.75rem 1rem; border-radius: 10px; display: flex; align-items: center; gap: 0.75rem;">
+                                <i class="fas fa-check-circle" style="font-size: 1.5rem; color: #16a34a;"></i>
+                                <div>
+                                    <span style="font-size: 0.75rem; color: #166534; font-weight: 600; display: block;">Pagados / Al Día</span>
+                                    <strong id="cc-stat-ok-count" style="font-size: 1.2rem; color: #15803d;">0 familias</strong>
+                                </div>
+                            </div>
+
+                            <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 0.75rem 1rem; border-radius: 10px; display: flex; align-items: center; gap: 0.75rem;">
+                                <i class="fas fa-exclamation-circle" style="font-size: 1.5rem; color: #dc2626;"></i>
+                                <div>
+                                    <span style="font-size: 0.75rem; color: #991b1b; font-weight: 600; display: block;">Adeudan Cuota</span>
+                                    <strong id="cc-stat-debt-count" style="font-size: 1.2rem; color: #b91c1c;">0 familias</strong>
+                                </div>
+                            </div>
+
+                            <div style="background: #fffbeb; border: 1px solid #fde68a; padding: 0.75rem 1rem; border-radius: 10px; display: flex; align-items: center; gap: 0.75rem;">
+                                <i class="fas fa-clock" style="font-size: 1.5rem; color: #d97706;"></i>
+                                <div>
+                                    <span style="font-size: 0.75rem; color: #92400e; font-weight: 600; display: block;">Por Revisar</span>
+                                    <strong id="cc-stat-pending-count" style="font-size: 1.2rem; color: #b45309;">0 familias</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="card">
                         <div class="table-responsive">
                             <table id="admin-cc-table">
                                 <thead>
                                     <tr>
-                                        <th>Usuario</th>
+                                        <th>Usuario / Familia</th>
                                         <th class="month-col">Feb</th>
                                         <th class="month-col">Mar</th>
                                         <th class="month-col">Abr</th>
@@ -461,7 +557,7 @@
                                         <th class="month-col">Oct</th>
                                         <th class="month-col">Nov</th>
                                         <th class="month-col">Dic</th>
-                                        <th>Deuda Total</th>
+                                        <th>Estado / Deuda</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -494,7 +590,7 @@
                                     <tr>
                                         <th>Nombre / Alumno</th>
                                         <th>Email / Usuario</th>
-                                        <th>Rol</th>
+                                        <th>Estado / Rol</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>

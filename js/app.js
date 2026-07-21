@@ -586,20 +586,33 @@ async function renderAdminUsers() {
             athletesHtml = `<small style="color:var(--text-muted)">Sin atletas registrados</small>`;
         }
 
+        const isPaused = u.paused === true;
+        const statusBadge = isPaused ? 
+            `<span class="badge" style="background:#fee2e2; color:#991b1b; border:1px solid #fecaca;"><i class="fas fa-pause-circle"></i> PAUSADO</span>` : 
+            `<span class="badge badge-approved" style="background:#dcfce7; color:#166534;"><i class="fas fa-check-circle"></i> ACTIVO</span>`;
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>
                 <div class="user-main-info">
-                    <span class="user-name">${u.name}</span>
+                    <span class="user-name">${u.name} ${isPaused ? '<small style="color:var(--danger); font-weight:bold;">(Pausado)</small>' : ''}</span>
                     <span class="user-id">@${u.username || u.id}</span>
                 </div>
             </td>
             <td>
                 ${athletesHtml}
             </td>
-            <td><span class="badge ${u.role === 'admin' ? 'badge-approved' : 'badge-pending'}">${u.role.toUpperCase()}</span></td>
+            <td>
+                <div style="display:flex; flex-direction:column; gap:0.25rem; align-items:flex-start;">
+                    ${statusBadge}
+                    <small style="color:var(--text-muted); font-size:0.7rem;">${u.role.toUpperCase()}</small>
+                </div>
+            </td>
             <td>
                 <div style="display:flex; gap:0.5rem">
+                    <button class="btn-action btn-toggle-pause" data-id="${id}" title="${isPaused ? 'Reactivar usuario (volverá a generar cuotas)' : 'Pausar usuario (no generará cuotas ni deuda)'}" style="color:${isPaused ? 'var(--success)' : '#d97706'}">
+                        <i class="fas ${isPaused ? 'fa-play' : 'fa-pause'}"></i>
+                    </button>
                     <button class="btn-action edit btn-edit-user" data-id="${id}" title="Editar cuenta y clave"><i class="fas fa-user-edit"></i></button> 
                     <button class="btn-action reject btn-del-user" data-id="${id}" title="Eliminar usuario" style="color:var(--danger)"><i class="fas fa-trash-alt"></i></button>
                 </div>
@@ -608,6 +621,25 @@ async function renderAdminUsers() {
     });
 
     // Eventos
+    tbody.querySelectorAll('.btn-toggle-pause').forEach(btn => btn.addEventListener('click', async () => {
+        const user = users.find(u => (u.id || u.username) === btn.dataset.id);
+        if (!user) return;
+
+        const newPausedState = !user.paused;
+        const actionWord = newPausedState ? 'PAUSAR' : 'REACTIVAR';
+        const msg = newPausedState ? 
+            `¿PAUSAR temporalmente a ${user.name}?\n\nMientras esté pausado, NO se le calculará cuota esperada ni se considerará como deuda en ningún mes.` :
+            `¿REACTIVAR a ${user.name}?\n\nVolverá a figurar activo y se le calculará la cuota correspondiente.`;
+
+        if (confirm(msg)) {
+            user.paused = newPausedState;
+            await window.DataManager.saveUser(user);
+            toast(`Usuario ${newPausedState ? 'Pausado' : 'Reactivado'} con éxito`);
+            renderAdminUsers();
+            renderAdminCC(); // Refrescar Cuenta Corriente también
+        }
+    }));
+
     tbody.querySelectorAll('.btn-edit-user').forEach(btn => btn.addEventListener('click', () => {
         const user = users.find(u => (u.id || u.username) === btn.dataset.id);
         if (user) openEditUserModal(user);
@@ -1762,36 +1794,76 @@ async function renderAdminCC(manualPayments = null) {
     const now = new Date();
     const currentMonthName = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][now.getMonth()];
 
-    // Actualizar encabezados para resaltar mes actual
+    // Obtener valores de los filtros
+    const selectedMonth = document.getElementById('cc-month-filter')?.value || 'ALL';
+    const selectedStatus = document.getElementById('cc-status-filter')?.value || 'ALL';
+    const selectedActivity = document.getElementById('cc-activity-filter')?.value || 'ALL';
+    const searchQuery = (document.getElementById('cc-search-input')?.value || '').toLowerCase().trim();
+
+    // Actualizar encabezados para resaltar mes actual o mes filtrado
     const thead = document.querySelector('#admin-cc-table thead tr');
     if (thead) {
-        let headers = `<th>Usuario</th>`;
+        let headers = `<th>Usuario / Familia</th>`;
         months.forEach(m => {
             const isCurrent = m === currentMonthName;
-            headers += `<th class="month-col ${isCurrent ? 'current-month-col' : ''}">${m.substring(0, 3)}</th>`;
+            const isSelected = selectedMonth === m;
+            const bgStyle = isSelected ? 'background-color: var(--primary); color: white;' : (isCurrent ? 'background-color: rgba(26, 54, 93, 0.1);' : '');
+            headers += `<th class="month-col ${isCurrent ? 'current-month-col' : ''}" style="${bgStyle}">${m.substring(0, 3)}</th>`;
         });
-        headers += `<th>Deuda Total</th>`;
+        headers += `<th>Deuda / Estado</th>`;
         thead.innerHTML = headers;
     }
+
+    let okCount = 0;
+    let debtCount = 0;
+    let pendingCount = 0;
+
+    const targetMonthForStats = selectedMonth === 'ALL' ? (months.includes(currentMonthName) ? currentMonthName : 'Febrero') : selectedMonth;
 
     users.forEach(u => {
         if (u.role === 'admin') return;
 
         const children = getChildList(u);
+
+        // Filtro por Actividad / Categoría (Infantiles, Pre Competitivo, Competitivo, u otros)
+        if (selectedActivity !== 'ALL') {
+            const hasActivity = children.some(c => {
+                const catLower = (c.category || '').toLowerCase();
+                const selLower = selectedActivity.toLowerCase();
+                return catLower.includes(selLower);
+            });
+            if (!hasActivity) return;
+        }
+
+        // Búsqueda por texto (nombre, usuario, nombre de atletas)
+        const childNamesText = children.map(c => c.name.toLowerCase()).join(' ');
+        const matchesSearch = !searchQuery || 
+                              (u.name && u.name.toLowerCase().includes(searchQuery)) || 
+                              (u.username && u.username.toLowerCase().includes(searchQuery)) || 
+                              childNamesText.includes(searchQuery);
+
+        if (!matchesSearch) return;
+
         let monthlyExpected = 0;
         let appliesSocial = false;
-        children.forEach(kid => {
-            const cleanCategory = kid.category.trim().toLowerCase();
-            const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
-            monthlyExpected += activity ? activity.price : (activities[0]?.price || 0);
-            if (activity && activity.social) appliesSocial = true;
-        });
-        if (appliesSocial) monthlyExpected += socialFee;
+
+        // Si el usuario está PAUSADO, no se le calcula cuota ni genera deuda
+        if (u.paused !== true) {
+            children.forEach(kid => {
+                const cleanCategory = kid.category.trim().toLowerCase();
+                const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
+                monthlyExpected += activity ? activity.price : (activities[0]?.price || 0);
+                if (activity && activity.social) appliesSocial = true;
+            });
+            if (appliesSocial) monthlyExpected += socialFee;
+        }
 
         let totalDebt = 0;
         let monthTds = '';
-
         const userPayments = payments.filter(p => p.userId === (u.id || u.username));
+
+        // Evaluación por mes para el usuario
+        let targetMonthStatus = 'VOID'; // OK, DEBT, PENDING, VOID
 
         months.forEach(m => {
             const paid = userPayments.filter(p => p.month === m && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0);
@@ -1803,8 +1875,17 @@ async function renderAdminCC(manualPayments = null) {
 
             if (isDebt || isPartial) totalDebt += (monthlyExpected - paid);
 
+            // Si es el mes objetivo para las estadísticas de tarjetas
+            if (m === targetMonthForStats) {
+                if (hasPending) targetMonthStatus = 'PENDING';
+                else if (isFull) targetMonthStatus = 'OK';
+                else if (isDebt || isPartial) targetMonthStatus = 'DEBT';
+            }
+
+            const isHighlightedMonth = selectedMonth === m;
+
             monthTds += `
-                <td class="month-col ${isCurrent ? 'current-month-col' : ''}">
+                <td class="month-col ${isCurrent ? 'current-month-col' : ''}" style="${isHighlightedMonth ? 'background-color: rgba(26, 54, 93, 0.08); font-weight: bold;' : ''}">
                     <div class="status-check ${isFull ? 'ok' : (hasPending ? 'pending' : (isDebt ? 'debt' : 'void'))}" 
                          onclick="${isDebt || (isPartial && !hasPending) ? `window.doManualCollection('${u.id || u.username}', '${m}', ${monthlyExpected - paid}, '${u.name}', '${children.map(c => c.name).join(', ')}')` : ''}"
                          style="${isDebt || (isPartial && !hasPending) ? 'cursor:pointer;' : ''}"
@@ -1814,19 +1895,61 @@ async function renderAdminCC(manualPayments = null) {
                 </td>`;
         });
 
+        // Conteo de tarjetas de métricas según mes elegido
+        if (targetMonthStatus === 'OK') okCount++;
+        else if (targetMonthStatus === 'DEBT') debtCount++;
+        else if (targetMonthStatus === 'PENDING') pendingCount++;
+
+        // Filtro por Estado (Si se selecciona un estado específico)
+        if (selectedStatus !== 'ALL') {
+            if (selectedStatus === 'DEBT' && targetMonthStatus !== 'DEBT') return;
+            if (selectedStatus === 'OK' && targetMonthStatus !== 'OK') return;
+            if (selectedStatus === 'PENDING' && targetMonthStatus !== 'PENDING') return;
+        }
+
         const tr = document.createElement('tr');
         const childNames = children.map(c => `<li>${c.name} (${c.category})</li>`).join('');
         tr.innerHTML = `
             <td>
                 <b>${u.name}</b><br>
                 <ul style="margin:5px 0; padding:0 15px; font-size:0.75rem; color:#666;">${childNames || '<li>Sin atletas</li>'}</ul>
-                <small>${u.username || u.id}</small>
+                <small style="color:var(--text-muted);">${u.username || u.id}</small>
             </td>
             ${monthTds}
-            <td><b class="${totalDebt > 0 ? 'text-red' : 'text-green'}" style="font-size: 1.1rem">$ ${totalDebt.toLocaleString('es-AR')}</b></td>
+            <td>
+                <b class="${totalDebt > 0 ? 'text-red' : 'text-green'}" style="font-size: 1.05rem; display: block;">$ ${totalDebt.toLocaleString('es-AR')}</b>
+                <small style="font-size:0.7rem; color:var(--text-muted);">${totalDebt > 0 ? 'Deuda acumulada' : 'Al Día'}</small>
+            </td>
         `;
         tbody.appendChild(tr);
     });
+
+    // Actualizar contadores visuales en el encabezado
+    const okEl = document.getElementById('cc-stat-ok-count');
+    const debtEl = document.getElementById('cc-stat-debt-count');
+    const pendingEl = document.getElementById('cc-stat-pending-count');
+
+    if (okEl) okEl.innerText = `${okCount} familias`;
+    if (debtEl) debtEl.innerText = `${debtCount} familias`;
+    if (pendingEl) pendingEl.innerText = `${pendingCount} familias`;
+
+    setupCCFilterListeners();
+}
+
+let ccListenersAssigned = false;
+function setupCCFilterListeners() {
+    if (ccListenersAssigned) return;
+    ccListenersAssigned = true;
+
+    ['cc-month-filter', 'cc-status-filter', 'cc-activity-filter'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', () => renderAdminCC());
+    });
+
+    document.getElementById('cc-search-input')?.addEventListener('input', () => renderAdminCC());
+
+    // Botones de exportación a PDF
+    document.getElementById('btn-export-pdf-cc')?.addEventListener('click', () => exportCuentaCorrientePDF());
+    document.getElementById('btn-export-pdf-reports')?.addEventListener('click', () => exportReporteCobrosPDF());
 }
 
 // Lógica de Cobro Manual (Solicitado por usuario)
@@ -2193,7 +2316,390 @@ function openEditPartnerModal(p) {
         if (logoName) logoName.innerText = "Toca para seleccionar imagen";
     }
 
-    document.getElementById('partner-active').value = String(p.active !== false);
-    
     modal.classList.add('active');
+}
+
+/**
+ * Generación de Reportes Oficiales en PDF con Logo de Correcaminos
+ */
+
+async function exportCuentaCorrientePDF() {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+        toast("Cargando motor de PDF, reintente en unos segundos...", "error");
+        return;
+    }
+
+    try {
+        const selectedMonth = document.getElementById('cc-month-filter')?.value || 'ALL';
+        const isSingleMonth = selectedMonth !== 'ALL';
+        const orientation = isSingleMonth ? 'portrait' : 'landscape';
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF(orientation, 'pt', 'a4');
+
+        const logoImg = new Image();
+        logoImg.src = 'img/Nuevo Logo Correcaminos.jpeg';
+
+        logoImg.onload = () => generateCCPDFContent(doc, logoImg, isSingleMonth, selectedMonth);
+        logoImg.onerror = () => generateCCPDFContent(doc, null, isSingleMonth, selectedMonth);
+    } catch (e) {
+        console.error("Error al exportar PDF:", e);
+        toast("Error al generar PDF", "error");
+    }
+}
+
+async function generateCCPDFContent(doc, logoImg, isSingleMonth, selectedMonth) {
+    const selectedStatus = document.getElementById('cc-status-filter')?.value || 'ALL';
+    const selectedActivity = document.getElementById('cc-activity-filter')?.value || 'ALL';
+
+    const users = await window.DataManager.getUsers();
+    const payments = await window.DataManager.getPayments();
+    const config = await window.DataManager.getConfig();
+    const activities = config.activities || [];
+    const socialFee = config.socialFee || 0;
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Dibujar Logo
+    if (logoImg) {
+        try {
+            doc.addImage(logoImg, 'JPEG', 35, 20, 48, 48);
+        } catch (e) {
+            console.warn("No se pudo insertar logo en el PDF:", e);
+        }
+    }
+
+    // Título y Encabezado
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(26, 54, 93); // --primary
+    doc.text("Asociación Civil Correcaminos - Escuela de Atletismo", 92, 36);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    
+    const subTitleStr = isSingleMonth ? 
+        `Reporte de Estado de Cuotas - Mes de ${selectedMonth.toUpperCase()}` : 
+        `Reporte General de Cuenta Corriente Anual`;
+    doc.text(subTitleStr, 92, 52);
+
+    // Meta datos fecha / filtros (Alineados a la derecha de forma limpia)
+    const fechaStr = new Date().toLocaleDateString('es-AR');
+    const statusText = selectedStatus === 'ALL' ? 'Todos' : (selectedStatus === 'DEBT' ? 'Impagos' : (selectedStatus === 'OK' ? 'Pagados' : 'Pendientes'));
+    
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Fecha: ${fechaStr}`, pageWidth - 35, 36, { align: 'right' });
+    doc.text(`Filtros: Estado (${statusText}) | Actividad (${selectedActivity})`, pageWidth - 35, 52, { align: 'right' });
+
+    // Línea divisora limpia
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(1);
+    doc.line(35, 76, pageWidth - 35, 76);
+
+    const months = ["Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    let headers = [];
+    let tableBody = [];
+
+    if (isSingleMonth) {
+        // FORMATO VERTICAL (PORTRAIT) - REPORTES INDIVIDUALES DE UN MES
+        headers = [["Familia / Socio", "Atletas / Categoría", "Cuota Esperada", "Monto Abonado", "Estado Cuota", "Saldo Pendiente"]];
+
+        let totalExpect = 0;
+        let totalPaid = 0;
+        let totalDebtMonth = 0;
+
+        users.forEach(u => {
+            if (u.role === 'admin') return;
+
+            const children = getChildList(u);
+
+            if (selectedActivity !== 'ALL') {
+                const hasActivity = children.some(c => (c.category || '').toLowerCase().includes(selectedActivity.toLowerCase()));
+                if (!hasActivity) return;
+            }
+
+            let monthlyExpected = 0;
+            let appliesSocial = false;
+
+            if (u.paused !== true) {
+                children.forEach(kid => {
+                    const cleanCategory = kid.category.trim().toLowerCase();
+                    const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
+                    monthlyExpected += activity ? activity.price : (activities[0]?.price || 0);
+                    if (activity && activity.social) appliesSocial = true;
+                });
+                if (appliesSocial) monthlyExpected += socialFee;
+            }
+
+            const userPayments = payments.filter(p => p.userId === (u.id || u.username));
+            const paid = userPayments.filter(p => p.month === selectedMonth && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0);
+            const isFull = paid >= monthlyExpected && monthlyExpected > 0;
+            const isPartial = paid > 0 && paid < monthlyExpected;
+            const isDebt = paid === 0 && monthlyExpected > 0;
+            const hasPending = userPayments.some(p => p.month === selectedMonth && p.status === 'pending');
+
+            let statusStr = "PAGADO";
+            if (hasPending) statusStr = "PENDIENTE";
+            else if (isDebt) statusStr = "IMPAGO";
+            else if (isPartial) statusStr = "PARCIAL";
+
+            if (selectedStatus !== 'ALL') {
+                if (selectedStatus === 'DEBT' && !isDebt && !isPartial) return;
+                if (selectedStatus === 'OK' && !isFull) return;
+                if (selectedStatus === 'PENDING' && !hasPending) return;
+            }
+
+            const debtVal = Math.max(0, monthlyExpected - paid);
+
+            totalExpect += monthlyExpected;
+            totalPaid += paid;
+            totalDebtMonth += debtVal;
+
+            const kidsStr = children.map(c => `${c.name} (${c.category})`).join('\n');
+
+            tableBody.push([
+                u.name,
+                kidsStr || 'Sin asignación',
+                `$ ${monthlyExpected.toLocaleString('es-AR')}`,
+                `$ ${paid.toLocaleString('es-AR')}`,
+                statusStr,
+                debtVal > 0 ? `$ ${debtVal.toLocaleString('es-AR')}` : '$ 0'
+            ]);
+        });
+
+        // Fila Resumen
+        tableBody.push([
+            "TOTALES",
+            "",
+            `$ ${totalExpect.toLocaleString('es-AR')}`,
+            `$ ${totalPaid.toLocaleString('es-AR')}`,
+            "",
+            `$ ${totalDebtMonth.toLocaleString('es-AR')}`
+        ]);
+
+        doc.autoTable({
+            head: headers,
+            body: tableBody,
+            startY: 88,
+            margin: { left: 35, right: 35 },
+            theme: 'grid',
+            styles: { fontSize: 8, cellPadding: 5, color: [15, 23, 42], valign: 'middle' },
+            headStyles: { fillColor: [26, 54, 93], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'left' },
+            columnStyles: {
+                0: { cellWidth: 120, fontStyle: 'bold' },
+                1: { cellWidth: 165 },
+                2: { cellWidth: 70, halign: 'right' },
+                3: { cellWidth: 70, halign: 'right' },
+                4: { cellWidth: 60, halign: 'center' },
+                5: { cellWidth: 70, halign: 'right', fontStyle: 'bold' }
+            },
+            didParseCell: (data) => {
+                if (data.row.index === tableBody.length - 1) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.fillColor = [241, 245, 249];
+                }
+                if (data.column.index === 4 && data.section === 'body' && data.row.index !== tableBody.length - 1) {
+                    if (data.cell.raw === 'PAGADO') {
+                        data.cell.styles.textColor = [22, 163, 74];
+                        data.cell.styles.fontStyle = 'bold';
+                    } else if (data.cell.raw === 'IMPAGO') {
+                        data.cell.styles.textColor = [220, 38, 38];
+                        data.cell.styles.fontStyle = 'bold';
+                    } else if (data.cell.raw === 'PENDIENTE' || data.cell.raw === 'PARCIAL') {
+                        data.cell.styles.textColor = [217, 119, 6];
+                        data.cell.styles.fontStyle = 'bold';
+                    }
+                }
+            }
+        });
+
+    } else {
+        // FORMATO HORIZONTAL (LANDSCAPE) - MATRIZ ANUAL DE TODOS LOS MESES
+        headers = [["Familia / Tutor", "Atletas Asignados", ...months.map(m => m.substring(0, 3)), "Deuda Total"]];
+
+        users.forEach(u => {
+            if (u.role === 'admin') return;
+
+            const children = getChildList(u);
+
+            if (selectedActivity !== 'ALL') {
+                const hasActivity = children.some(c => (c.category || '').toLowerCase().includes(selectedActivity.toLowerCase()));
+                if (!hasActivity) return;
+            }
+
+            let monthlyExpected = 0;
+            let appliesSocial = false;
+            children.forEach(kid => {
+                const cleanCategory = kid.category.trim().toLowerCase();
+                const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
+                monthlyExpected += activity ? activity.price : (activities[0]?.price || 0);
+                if (activity && activity.social) appliesSocial = true;
+            });
+            if (appliesSocial) monthlyExpected += socialFee;
+
+            let totalDebt = 0;
+            const userPayments = payments.filter(p => p.userId === (u.id || u.username));
+
+            const monthCells = months.map(m => {
+                const paid = userPayments.filter(p => p.month === m && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0);
+                const isFull = paid >= monthlyExpected && monthlyExpected > 0;
+                const isPartial = paid > 0 && paid < monthlyExpected;
+                const isDebt = paid === 0 && monthlyExpected > 0;
+                const hasPending = userPayments.some(p => p.month === m && p.status === 'pending');
+
+                if (isDebt || isPartial) totalDebt += (monthlyExpected - paid);
+
+                if (isFull) return "OK";
+                if (hasPending) return "PEND";
+                if (isDebt) return "IMPAGO";
+                return "-";
+            });
+
+            if (selectedStatus !== 'ALL') {
+                const currentMonthName = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][new Date().getMonth()];
+                const checkMonth = months.includes(currentMonthName) ? currentMonthName : 'Febrero';
+                const monthIdx = months.indexOf(checkMonth);
+                const statusCell = monthCells[monthIdx];
+
+                if (selectedStatus === 'DEBT' && statusCell !== 'IMPAGO') return;
+                if (selectedStatus === 'OK' && statusCell !== 'OK') return;
+                if (selectedStatus === 'PENDING' && statusCell !== 'PEND') return;
+            }
+
+            const kidsStr = children.map(c => `${c.name} (${c.category})`).join(', ');
+
+            tableBody.push([
+                u.name,
+                kidsStr || 'Sin asignación',
+                ...monthCells,
+                totalDebt > 0 ? `$ ${totalDebt.toLocaleString('es-AR')}` : 'AL DÍA'
+            ]);
+        });
+
+        doc.autoTable({
+            head: headers,
+            body: tableBody,
+            startY: 88,
+            margin: { left: 35, right: 35 },
+            theme: 'striped',
+            styles: { fontSize: 8, cellPadding: 5 },
+            headStyles: { fillColor: [26, 54, 93], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+            columnStyles: {
+                0: { cellWidth: 110, fontStyle: 'bold' },
+                1: { cellWidth: 150 },
+                13: { halign: 'right', fontStyle: 'bold' }
+            },
+            didParseCell: (data) => {
+                if (data.section === 'body' && data.column.index >= 2 && data.column.index <= 12) {
+                    if (data.cell.raw === 'OK') {
+                        data.cell.styles.textColor = [22, 163, 74];
+                        data.cell.styles.fontStyle = 'bold';
+                    } else if (data.cell.raw === 'IMPAGO') {
+                        data.cell.styles.textColor = [220, 38, 38];
+                        data.cell.styles.fontStyle = 'bold';
+                    } else if (data.cell.raw === 'PEND') {
+                        data.cell.styles.textColor = [217, 119, 6];
+                    }
+                }
+            }
+        });
+    }
+
+    const docName = isSingleMonth ? 
+        `Correcaminos_Reporte_${selectedMonth.toUpperCase()}_${selectedStatus}_${Date.now()}.pdf` : 
+        `Correcaminos_Cuenta_Corriente_Anual_${Date.now()}.pdf`;
+
+    doc.save(docName);
+    toast("Reporte PDF generado correctamente");
+}
+
+async function exportReporteCobrosPDF() {
+    if (!window.jspdf || !window.jspdf.jsPDF) {
+        toast("Cargando motor de PDF, reintente en unos segundos...", "error");
+        return;
+    }
+
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('portrait', 'pt', 'a4');
+
+        const logoImg = new Image();
+        logoImg.src = 'img/Nuevo Logo Correcaminos.jpeg';
+
+        logoImg.onload = async () => generateReportsPDFContent(doc, logoImg);
+        logoImg.onerror = async () => generateReportsPDFContent(doc, null);
+    } catch (e) {
+        console.error("Error al exportar PDF de Cobros:", e);
+        toast("Error al generar PDF", "error");
+    }
+}
+
+async function generateReportsPDFContent(doc, logoImg) {
+    const selectedMonth = document.getElementById('filter-month')?.value || 'all';
+    const selectedStatus = document.getElementById('filter-status')?.value || 'all';
+
+    const payments = await window.DataManager.getPayments();
+    let filtered = payments;
+
+    if (selectedMonth !== 'all') filtered = filtered.filter(p => p.month === selectedMonth);
+    if (selectedStatus !== 'all') filtered = filtered.filter(p => p.status === selectedStatus);
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    if (logoImg) {
+        try { doc.addImage(logoImg, 'JPEG', 35, 20, 48, 48); } catch (e) {}
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(26, 54, 93);
+    doc.text("Asociación Civil Correcaminos - Escuela de Atletismo", 92, 36);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Reporte Oficial de Rendición de Cobros e Ingresos de Caja", 92, 52);
+
+    const fechaStr = new Date().toLocaleDateString('es-AR');
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Fecha: ${fechaStr}`, pageWidth - 35, 36, { align: 'right' });
+    doc.text(`Filtros: Mes (${selectedMonth}) | Estado (${selectedStatus})`, pageWidth - 35, 52, { align: 'right' });
+
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(1);
+    doc.line(35, 76, pageWidth - 35, 76);
+
+    let totalRecaudado = 0;
+    const tableBody = filtered.map(p => {
+        if (p.status === 'approved') totalRecaudado += (p.amount || 0);
+        return [
+            p.date || '---',
+            p.userName || p.userId,
+            p.month,
+            `$ ${(p.amount || 0).toLocaleString('es-AR')}`,
+            p.paymentMethod || 'Manual',
+            p.status === 'approved' ? 'Aprobado' : (p.status === 'pending' ? 'Pendiente' : 'Rechazado')
+        ];
+    });
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(22, 101, 52);
+    doc.text(`Recaudación Total Aprobada: $ ${totalRecaudado.toLocaleString('es-AR')}`, 35, 96);
+
+    doc.autoTable({
+        head: [["Fecha", "Socio / Familia", "Mes", "Monto", "Medio", "Estado"]],
+        body: tableBody,
+        startY: 108,
+        margin: { left: 35, right: 35 },
+        theme: 'striped',
+        styles: { fontSize: 8, cellPadding: 5 },
+        headStyles: { fillColor: [26, 54, 93], textColor: [255, 255, 255], fontStyle: 'bold' }
+    });
+
+    doc.save(`Correcaminos_Reporte_Cobros_${selectedMonth}_${Date.now()}.pdf`);
+    toast("Reporte de Cobros en PDF exportado con éxito");
 }

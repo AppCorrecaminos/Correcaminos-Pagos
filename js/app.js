@@ -212,7 +212,10 @@ function getChildList(user) {
     if (user.athletes && user.athletes.length > 0) {
         return user.athletes.map(a => ({
             name: a.name,
-            category: a.activity || a.category || 'Mayores'
+            category: a.activity || a.category || 'Mayores',
+            discountType: a.discountType || 'none',
+            discountValue: parseFloat(a.discountValue || 0),
+            discountReason: a.discountReason || ''
         }));
     }
     return parseChildren(user.children);
@@ -574,11 +577,17 @@ async function renderAdminUsers() {
         let athletesHtml = '';
         if (athletes.length > 0) {
             athletesHtml = `<div class="admin-user-athletes">
-                ${athletes.map((a, idx) => `
+                ${athletes.map((a, idx) => {
+                    let discountBadge = '';
+                    if (a.discountType === 'full') discountBadge = ' <small style="color:#15803d; font-weight:700;">[🏅 Beca 100%]</small>';
+                    else if (a.discountType === 'percent' && a.discountValue > 0) discountBadge = ` <small style="color:#15803d; font-weight:700;">[🏷️ ${a.discountValue}% OFF]</small>`;
+                    else if (a.discountType === 'fixed' && a.discountValue > 0) discountBadge = ` <small style="color:#15803d; font-weight:700;">[💵 -$${a.discountValue}]</small>`;
+
+                    return `
                     <div class="mini-athlete-pill" onclick="openAdminAthleteFile('${id}', ${idx})">
-                        <i class="fas fa-id-card"></i> ${a.name} <small>(${a.activity || a.category})</small>
-                    </div>
-                `).join('')}
+                        <i class="fas fa-id-card"></i> ${a.name} <small>(${a.activity || a.category})</small>${discountBadge}
+                    </div>`;
+                }).join('')}
             </div>`;
         } else if (u.children && u.children.trim() !== "") {
             athletesHtml = `<small style="color:var(--warning)"><i class="fas fa-exclamation-triangle"></i> Pendiente migrar: ${u.children}</small>`;
@@ -633,7 +642,8 @@ async function renderAdminUsers() {
 
         if (confirm(msg)) {
             user.paused = newPausedState;
-            await window.DataManager.saveUser(user);
+            const uid = user.id || user.username;
+            await window.DataManager.saveUser(uid, user);
             toast(`Usuario ${newPausedState ? 'Pausado' : 'Reactivado'} con éxito`);
             renderAdminUsers();
             renderAdminCC(); // Refrescar Cuenta Corriente también
@@ -689,6 +699,13 @@ async function openAdminAthleteFile(userId, athleteIndex) {
     document.getElementById('ath-parents-phone').value = athlete.parentsPhone || '';
     document.getElementById('ath-address').value = athlete.address || '';
     document.getElementById('ath-rules-accepted').checked = athlete.rulesAccepted || false;
+
+    // Cargar datos de Beca / Bonificación
+    if (document.getElementById('ath-discount-type')) {
+        document.getElementById('ath-discount-type').value = athlete.discountType || 'none';
+        document.getElementById('ath-discount-value').value = athlete.discountValue || 0;
+        document.getElementById('ath-discount-reason').value = athlete.discountReason || '';
+    }
 
     // Reset medical cert status in modal
     const certStatus = document.getElementById('medical-cert-status');
@@ -814,7 +831,9 @@ function setupEventListeners() {
     document.getElementById('edit-user-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('edit-u-id').value;
+        const existingUser = (await window.DataManager.getUser(id)) || {};
         await window.DataManager.saveUser(id, {
+            ...existingUser,
             name: document.getElementById('edit-u-name').value,
             username: document.getElementById('edit-u-username').value.toLowerCase().trim(),
             children: getActivitiesFromList('edit-u-activities-list'),
@@ -1181,6 +1200,9 @@ function setupEventListeners() {
             address: document.getElementById('ath-address').value,
             category: document.getElementById('ath-category').value,
             activity: document.getElementById('ath-activity').value,
+            discountType: document.getElementById('ath-discount-type')?.value || 'none',
+            discountValue: parseFloat((document.getElementById('ath-discount-value')?.value || '0').replace(/[^0-9.]/g, '')) || 0,
+            discountReason: document.getElementById('ath-discount-reason')?.value || '',
             rulesAccepted: document.getElementById('ath-rules-accepted').checked,
             medicalCert: modal.dataset.tempCert || null
         };
@@ -1220,12 +1242,7 @@ function setupEventListeners() {
 
         const config = await window.DataManager.getConfig();
         const activities = config.activities || [];
-        let children = [];
-        if (currentUser.athletes && currentUser.athletes.length > 0) {
-            children = currentUser.athletes.map(a => ({ name: a.name, category: a.activity || a.category || 'Mayores' }));
-        } else {
-            children = parseChildren(currentUser.children);
-        }
+        let children = getChildList(currentUser);
         const monthsNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
         const today = new Date();
         const currentMonthIndex = today.getMonth();
@@ -1250,10 +1267,20 @@ function setupEventListeners() {
         children.forEach(kid => {
             const cleanCategory = kid.category.trim().toLowerCase();
             const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
-            const price = activity ? activity.price : (activities[0]?.price || 40000);
+            let price = activity ? activity.price : (activities[0]?.price || 40000);
+
+            // Aplicar Bonificación / Beca del atleta
+            if (kid.discountType === 'full') {
+                price = 0;
+            } else if (kid.discountType === 'percent' && kid.discountValue > 0) {
+                price = Math.max(0, price * (1 - (kid.discountValue / 100)));
+            } else if (kid.discountType === 'fixed' && kid.discountValue > 0) {
+                price = Math.max(0, price - kid.discountValue);
+            }
+
             total += price;
-            if (lateStatus) total += lateFeeAmount;
-            if (activity && activity.social) appliesSocial = true;
+            if (lateStatus && price > 0) total += lateFeeAmount;
+            if (activity && activity.social && kid.discountType !== 'full') appliesSocial = true;
         });
 
         if (appliesSocial) total += (config.socialFee || 3000);
@@ -1852,7 +1879,18 @@ async function renderAdminCC(manualPayments = null) {
             children.forEach(kid => {
                 const cleanCategory = kid.category.trim().toLowerCase();
                 const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
-                monthlyExpected += activity ? activity.price : (activities[0]?.price || 0);
+                let basePrice = activity ? activity.price : (activities[0]?.price || 0);
+
+                // Aplicar Bonificación / Beca del atleta
+                if (kid.discountType === 'full') {
+                    basePrice = 0;
+                } else if (kid.discountType === 'percent' && kid.discountValue > 0) {
+                    basePrice = Math.max(0, basePrice * (1 - (kid.discountValue / 100)));
+                } else if (kid.discountType === 'fixed' && kid.discountValue > 0) {
+                    basePrice = Math.max(0, basePrice - kid.discountValue);
+                }
+
+                monthlyExpected += basePrice;
                 if (activity && activity.social) appliesSocial = true;
             });
             if (appliesSocial) monthlyExpected += socialFee;
@@ -2427,7 +2465,18 @@ async function generateCCPDFContent(doc, logoImg, isSingleMonth, selectedMonth) 
                 children.forEach(kid => {
                     const cleanCategory = kid.category.trim().toLowerCase();
                     const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
-                    monthlyExpected += activity ? activity.price : (activities[0]?.price || 0);
+                    let basePrice = activity ? activity.price : (activities[0]?.price || 0);
+
+                    // Aplicar Bonificación / Beca del atleta
+                    if (kid.discountType === 'full') {
+                        basePrice = 0;
+                    } else if (kid.discountType === 'percent' && kid.discountValue > 0) {
+                        basePrice = Math.max(0, basePrice * (1 - (kid.discountValue / 100)));
+                    } else if (kid.discountType === 'fixed' && kid.discountValue > 0) {
+                        basePrice = Math.max(0, basePrice - kid.discountValue);
+                    }
+
+                    monthlyExpected += basePrice;
                     if (activity && activity.social) appliesSocial = true;
                 });
                 if (appliesSocial) monthlyExpected += socialFee;
@@ -2529,15 +2578,26 @@ async function generateCCPDFContent(doc, logoImg, isSingleMonth, selectedMonth) 
                 if (!hasActivity) return;
             }
 
-            let monthlyExpected = 0;
-            let appliesSocial = false;
-            children.forEach(kid => {
-                const cleanCategory = kid.category.trim().toLowerCase();
-                const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
-                monthlyExpected += activity ? activity.price : (activities[0]?.price || 0);
-                if (activity && activity.social) appliesSocial = true;
-            });
-            if (appliesSocial) monthlyExpected += socialFee;
+            if (u.paused !== true) {
+                children.forEach(kid => {
+                    const cleanCategory = kid.category.trim().toLowerCase();
+                    const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
+                    let basePrice = activity ? activity.price : (activities[0]?.price || 0);
+
+                    // Aplicar Bonificación / Beca del atleta
+                    if (kid.discountType === 'full') {
+                        basePrice = 0;
+                    } else if (kid.discountType === 'percent' && kid.discountValue > 0) {
+                        basePrice = Math.max(0, basePrice * (1 - (kid.discountValue / 100)));
+                    } else if (kid.discountType === 'fixed' && kid.discountValue > 0) {
+                        basePrice = Math.max(0, basePrice - kid.discountValue);
+                    }
+
+                    monthlyExpected += basePrice;
+                    if (activity && activity.social) appliesSocial = true;
+                });
+                if (appliesSocial) monthlyExpected += socialFee;
+            }
 
             let totalDebt = 0;
             const userPayments = payments.filter(p => p.userId === (u.id || u.username));

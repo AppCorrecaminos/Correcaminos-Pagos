@@ -1038,6 +1038,31 @@
                             <input type="text" id="ath-address" placeholder="Calle, Número, Barrio" required>
                         </div>
                     </div>
+                    <div class="card" style="padding: 1rem; background: #f0fdf4; border: 1px solid #bbf7d0; margin-bottom: 1.5rem;">
+                        <h4 style="margin-bottom: 0.75rem; font-size: 0.9rem; color: #166534; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-award" style="color: #16a34a;"></i> Beca / Bonificación Deportiva
+                        </h4>
+                        <div class="form-grid-2">
+                            <div class="form-group">
+                                <label for="ath-discount-type">Tipo de Beca</label>
+                                <select id="ath-discount-type" style="background: white;">
+                                    <option value="none">Sin Beca (Cuota Completa)</option>
+                                    <option value="full">🏅 Beca Completa (100% Bonificado)</option>
+                                    <option value="percent">🏷️ Beca Parcial (%)</option>
+                                    <option value="fixed">💵 Monto Fijo de Descuento ($)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="ath-discount-value">Valor (Porcentaje % o Monto $)</label>
+                                <input type="text" id="ath-discount-value" placeholder="Ej: 50 o 50% o $10.000" value="0" style="background: white;">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top: 0.5rem;">
+                            <label for="ath-discount-reason">Motivo / Nota de la Beca (Opcional)</label>
+                            <input type="text" id="ath-discount-reason" placeholder="Ej: Beca por Mérito Deportivo / Descuento Grupo Familiar" style="background: white;">
+                        </div>
+                    </div>
+
                     <div class="card" style="padding: 1rem; background: #f8fafc; margin-bottom: 1.5rem;">
                         <h4 style="margin-bottom: 1rem; font-size: 0.9rem; color: var(--primary);">Datos de los Padres /
                             Tutores</h4>

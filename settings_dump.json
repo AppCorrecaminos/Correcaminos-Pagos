@@ -1,0 +1,82 @@
+﻿{
+    "name":  "projects/correcaminos-e567e/databases/(default)/documents/settings/general",
+    "fields":  {
+                   "lateFeeDay":  {
+                                      "integerValue":  "12"
+                                  },
+                   "activities":  {
+                                      "arrayValue":  {
+                                                         "values":  [
+                                                                        {
+                                                                            "mapValue":  {
+                                                                                             "fields":  {
+                                                                                                            "name":  {
+                                                                                                                         "stringValue":  "Atletismo Eq. Competitivo"
+                                                                                                                     },
+                                                                                                            "social":  {
+                                                                                                                           "booleanValue":  true
+                                                                                                                       },
+                                                                                                            "price":  {
+                                                                                                                          "integerValue":  "45000"
+                                                                                                                      }
+                                                                                                        }
+                                                                                         }
+                                                                        },
+                                                                        {
+                                                                            "mapValue":  {
+                                                                                             "fields":  {
+                                                                                                            "name":  {
+                                                                                                                         "stringValue":  "Kids Infantiles A y B"
+                                                                                                                     },
+                                                                                                            "social":  {
+                                                                                                                           "booleanValue":  false
+                                                                                                                       },
+                                                                                                            "price":  {
+                                                                                                                          "integerValue":  "45000"
+                                                                                                                      }
+                                                                                                        }
+                                                                                         }
+                                                                        },
+                                                                        {
+                                                                            "mapValue":  {
+                                                                                             "fields":  {
+                                                                                                            "name":  {
+                                                                                                                         "stringValue":  "Atletas Libres"
+                                                                                                                     },
+                                                                                                            "price":  {
+                                                                                                                          "integerValue":  "0"
+                                                                                                                      },
+                                                                                                            "social":  {
+                                                                                                                           "booleanValue":  true
+                                                                                                                       }
+                                                                                                        }
+                                                                                         }
+                                                                        },
+                                                                        {
+                                                                            "mapValue":  {
+                                                                                             "fields":  {
+                                                                                                            "name":  {
+                                                                                                                         "stringValue":  "Atletismo Eq. Pre-Competitivo"
+                                                                                                                     },
+                                                                                                            "social":  {
+                                                                                                                           "booleanValue":  true
+                                                                                                                       },
+                                                                                                            "price":  {
+                                                                                                                          "integerValue":  "45000"
+                                                                                                                      }
+                                                                                                        }
+                                                                                         }
+                                                                        }
+                                                                    ]
+                                                     }
+                                  },
+                   "lateFeeAmount":  {
+                                         "integerValue":  "5000"
+                                     },
+                   "socialFee":  {
+                                     "integerValue":  "5000"
+                                 }
+               },
+    "createTime":  "2026-01-28T13:36:30.409076Z",
+    "updateTime":  "2026-07-21T16:13:40.127959Z"
+}

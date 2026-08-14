@@ -166,9 +166,13 @@
                         </div>
                     </div>
                     <div class="nav-menu">
-                        <button class="nav-link active" data-target="user-dashboard-tab">
-                            <i class="fas fa-home"></i>
+                        <button class="nav-link active" data-target="user-profile-tab">
+                            <i class="fas fa-user-graduate"></i>
                             <span>Mi Perfil</span>
+                        </button>
+                        <button class="nav-link" data-target="user-finance-tab">
+                            <i class="fas fa-wallet"></i>
+                            <span>Pagos y C.C.</span>
                         </button>
                         <button class="nav-link" data-target="user-benefits-tab">
                             <i class="fas fa-gift"></i>
@@ -188,99 +192,107 @@
             </nav>
 
             <main class="container">
-                <!-- Pestaña Principal del Socio -->
-                <div id="user-dashboard-tab" class="user-tab active">
+                <!-- Pestaña 1: Mi Perfil (Datos del Atleta, Certificado Médico y Reglamento) -->
+                <div id="user-profile-tab" class="user-tab active">
                     <header class="dashboard-header">
-                        <h2>Mi Perfil</h2>
-                        <p>Gestiona los pagos de tu hijo/a</p>
+                        <h2>Mi Perfil y Atletas</h2>
+                        <p>Fichas técnicas, certificados médicos y reglamentos de convivencia</p>
                     </header>
 
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon athletics"><i class="fas fa-running"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-label">Cuota Actividades</span>
-                            <span class="stat-value" id="fee-athletics">$0</span>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon social"><i class="fas fa-users"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-label">Cuota Social</span>
-                            <span class="stat-value" id="fee-social">$0</span>
-                        </div>
-                    </div>
-                    <div class="stat-card highlight">
-                        <div class="stat-icon total"><i class="fas fa-calendar-check"></i></div>
-                        <div class="stat-info">
-                            <span class="stat-label">Estado de Cuenta</span>
-                            <span class="stat-value" id="user-cc-status">Al Día</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Yearly Timeline for Parents -->
-                <div class="card" style="margin-bottom: 2rem;">
-                    <div class="card-header">
-                        <h3>Mi Estado Anual (Febrero - Diciembre)</h3>
-                    </div>
-                    <div class="card-body">
-                        <div class="yearly-timeline" id="user-yearly-timeline">
-                            <!-- month items will be generated here -->
-                        </div>
-                    </div>
-                </div>
-
-                <div id="breakdown-container" class="dashboard-content" style="margin-bottom: 2rem;">
-                    <!-- Tabla de desglose por hijo se insertará aquí -->
-                </div>
-
-                <!-- Section for Athlete Profiles -->
-                <div class="card" style="margin-bottom: 2rem;">
-                    <div class="card-header"
-                        style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <h3>Ficha de Datos - Mis Atletas</h3>
-                            <p class="text-xs">Completa los datos de cada atleta para el seguro y registros técnicos.
-                            </p>
-                        </div>
-                        <button id="btn-add-athlete-manually" class="btn-primary btn-sm">
-                            <i class="fas fa-plus"></i> Añadir Atleta
-                        </button>
-                    </div>
-                    <div class="card-body">
-                        <div id="athletes-container" class="athletes-grid">
-                            <!-- Athlete cards will be generated here -->
-                        </div>
-                    </div>
-                </div>
-
-                <div class="dashboard-content">
-                    <div class="card payment-history">
-                        <div class="card-header">
-                            <h3>Historial de Pagos</h3>
-                            <button class="btn-primary btn-sm" id="btn-report-payment">
-                                <i class="fas fa-plus"></i> Informar Pago
+                    <!-- Section for Athlete Profiles -->
+                    <div class="card" style="margin-bottom: 2rem;">
+                        <div class="card-header"
+                            style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <h3>Ficha de Datos - Mis Atletas</h3>
+                                <p class="text-xs">Completa los datos de cada atleta para el seguro y registros técnicos.
+                                </p>
+                            </div>
+                            <button id="btn-add-athlete-manually" class="btn-primary btn-sm">
+                                <i class="fas fa-plus"></i> Añadir Atleta
                             </button>
                         </div>
-                        <div class="table-responsive">
-                            <table id="payments-table">
-                                <thead>
-                                    <tr>
-                                        <th>Mes</th>
-                                        <th>Fecha</th>
-                                        <th>Monto</th>
-                                        <th>Estado</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                </tbody>
-                            </table>
+                        <div class="card-body">
+                            <div id="athletes-container" class="athletes-grid">
+                                <!-- Athlete cards will be generated here -->
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+
+                <!-- Pestaña 2: Pagos y Cuenta Corriente (Información Financiera) -->
+                <div id="user-finance-tab" class="user-tab">
+                    <header class="dashboard-header">
+                        <h2>Cuenta Corriente y Pagos</h2>
+                        <p>Estado de cuenta, desglose de cuotas e historial de pagos</p>
+                    </header>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon athletics"><i class="fas fa-running"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-label">Cuota Actividades</span>
+                                <span class="stat-value" id="fee-athletics">$0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon social"><i class="fas fa-users"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-label">Cuota Social</span>
+                                <span class="stat-value" id="fee-social">$0</span>
+                            </div>
+                        </div>
+                        <div class="stat-card highlight">
+                            <div class="stat-icon total"><i class="fas fa-calendar-check"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-label">Estado de Cuenta</span>
+                                <span class="stat-value" id="user-cc-status">Al Día</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Yearly Timeline for Parents -->
+                    <div class="card" style="margin-bottom: 2rem;">
+                        <div class="card-header">
+                            <h3>Mi Estado Anual</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="yearly-timeline" id="user-yearly-timeline">
+                                <!-- month items will be generated here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="breakdown-container" class="dashboard-content" style="margin-bottom: 2rem;">
+                        <!-- Tabla de desglose por hijo se insertará aquí -->
+                    </div>
+
+                    <div class="dashboard-content">
+                        <div class="card payment-history">
+                            <div class="card-header">
+                                <h3>Historial de Pagos</h3>
+                                <button class="btn-primary btn-sm" id="btn-report-payment">
+                                    <i class="fas fa-plus"></i> Informar Pago
+                                </button>
+                            </div>
+                            <div class="table-responsive">
+                                <table id="payments-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Mes</th>
+                                            <th>Fecha</th>
+                                            <th>Monto</th>
+                                            <th>Estado</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
             <!-- Pestaña de Beneficios y Convenios del Socio -->
             <div id="user-benefits-tab" class="user-tab">

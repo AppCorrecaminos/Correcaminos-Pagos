@@ -774,6 +774,8 @@ function setupEventListeners() {
             } else if (targetEl.classList.contains('user-tab')) {
                 document.querySelectorAll('.user-tab').forEach(t => t.classList.remove('active'));
                 targetEl.classList.add('active');
+                if (targetId === 'user-benefits-tab') renderUserBenefits();
+                if (targetId === 'user-finance-tab' || targetId === 'user-profile-tab') updateUI();
             }
 
             link.parentElement.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));

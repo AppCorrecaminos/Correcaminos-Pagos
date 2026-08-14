@@ -765,11 +765,11 @@ select {
     gap: 0.5rem;
 }
 
-.admin-tab, .user-tab {
+.admin-tab {
     display: none;
 }
 
-.admin-tab.active, .user-tab.active {
+.admin-tab.active {
     display: block;
     animation: fadeIn 0.4s ease-out;
 }
@@ -1207,28 +1207,21 @@ select {
         gap: 4px;
         font-size: 0.7rem;
         color: var(--text-muted);
-        width: 48%;
+        width: 22%;
         height: 100%;
         padding: 0.5rem 0;
         font-weight: 600;
-        transition: color 0.15s ease, transform 0.15s ease;
-        touch-action: manipulation;
-        -webkit-tap-highlight-color: transparent;
-        user-select: none;
-        cursor: pointer;
-    }
-    .nav-link:active {
-        transform: scale(0.92);
+        transition: color 0.2s ease, transform 0.2s ease;
     }
     .nav-link i {
         font-size: 1.25rem;
-        transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .nav-link.active {
         color: var(--primary);
     }
     .nav-link.active i {
-        transform: translateY(-2px) scale(1.15);
+        transform: translateY(-3px) scale(1.15);
         color: var(--primary-light);
     }
     .nav-link.active::after {
@@ -1244,6 +1237,16 @@ select {
         grid-template-columns: 1fr;
         gap: 1rem;
     }
+}
+
+/* User Tab System matching Admin Tabs */
+.user-tab {
+    display: none;
+}
+
+.user-tab.active {
+    display: block;
+    animation: fadeIn 0.4s ease-out;
 }
 
 /* Benefit Cards Visual Aesthetics */
@@ -1272,4 +1275,4 @@ select {
 .coupon-badge {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
     border: 1px solid rgba(255, 255, 255, 0.1);
-}
+}

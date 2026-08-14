@@ -81,9 +81,12 @@ document.addEventListener('DOMContentLoaded', () => {
 async function initApp() {
     currentUser = window.Auth.getCurrentUser();
     if (currentUser) {
-        // Refrescar datos del usuario desde la nube si es posible
+        // Mostrar la vista inmediatamente antes de realizar cualquier llamada a la nube
+        showView(currentUser.role === 'admin' ? 'admin-view' : 'user-view');
+        updateUI();
+
+        // Refrescar datos del usuario desde la nube en segundo plano (no bloqueante)
         try {
-            // Usar el nuevo método getUser para obtener el usuario específico
             const fresh = await window.DataManager.getUser(currentUser.id);
             if (fresh) {
                 currentUser = fresh;
@@ -92,13 +95,11 @@ async function initApp() {
                 } catch (errStorage) {
                     console.warn("Storage lleno al actualizar sesión:", errStorage);
                 }
+                updateUI();
             }
         } catch (e) {
             console.warn("No se pudo refrescar el usuario desde la nube, usando sesión local.", e);
         }
-
-        showView(currentUser.role === 'admin' ? 'admin-view' : 'user-view');
-        updateUI();
     } else {
         showView('login-view');
     }
@@ -112,11 +113,15 @@ function showView(viewId) {
         target.classList.add('active');
         if (viewId === 'user-view') {
             document.querySelectorAll('.user-tab').forEach(t => t.classList.remove('active'));
-            document.getElementById('user-profile-tab')?.classList.add('active');
+            const profileTab = document.getElementById('user-profile-tab');
+            if (profileTab) profileTab.classList.add('active');
+            else document.querySelectorAll('.user-tab')[0]?.classList.add('active');
+
             const navLinks = target.querySelectorAll('.nav-link');
             navLinks.forEach(l => l.classList.remove('active'));
             const defaultNav = target.querySelector('.nav-link[data-target="user-profile-tab"]');
             if (defaultNav) defaultNav.classList.add('active');
+            else navLinks[0]?.classList.add('active');
         }
     }
 }

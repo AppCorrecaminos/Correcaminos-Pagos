@@ -112,10 +112,10 @@ function showView(viewId) {
         target.classList.add('active');
         if (viewId === 'user-view') {
             document.querySelectorAll('.user-tab').forEach(t => t.classList.remove('active'));
-            document.getElementById('user-dashboard-tab')?.classList.add('active');
+            document.getElementById('user-profile-tab')?.classList.add('active');
             const navLinks = target.querySelectorAll('.nav-link');
             navLinks.forEach(l => l.classList.remove('active'));
-            const defaultNav = target.querySelector('.nav-link[data-target="user-dashboard-tab"]');
+            const defaultNav = target.querySelector('.nav-link[data-target="user-profile-tab"]');
             if (defaultNav) defaultNav.classList.add('active');
         }
     }
@@ -293,8 +293,9 @@ async function updateUI() {
             const defaultMonthIndex = currentMonthIndex === 0 ? 1 : currentMonthIndex;
             const defaultMonthName = monthsNames[defaultMonthIndex];
 
-            // Usar el mes seleccionado en la línea de tiempo, con fallback al mes por defecto
-            const displayMonthName = selectedTimelineMonth || defaultMonthName;
+            // Usar el mes seleccionado en la línea de tiempo, con fallback al primer mes pendiente real del usuario
+            const pendingMonthFallback = getFirstPendingMonth(payments, defaultMonthName, currentUser);
+            const displayMonthName = selectedTimelineMonth || pendingMonthFallback;
 
             // Comprobar el estado del pago para el mes seleccionado
             const mPayments = payments.filter(p => p.month === displayMonthName).sort((a, b) => b.timestamp - a.timestamp);
@@ -1710,8 +1711,10 @@ async function renderUserDashboard() {
     });
     const lastRejected = activeRejections.sort((a, b) => b.timestamp - a.timestamp)[0];
 
+    const isAlDia = await window.isUserAlDia(currentUser.id, payments);
+
     const statusCard = document.querySelector('.stat-card.highlight');
-    const statusIcon = statusCard.querySelector('.stat-icon i');
+    const statusIcon = statusCard ? statusCard.querySelector('.stat-icon i') : null;
     if (statusCard) {
         if (lastRejected) {
             statusCard.style.background = 'linear-gradient(135deg, #e53e3e 0%, #9b2c2c 100%)';
@@ -1721,13 +1724,14 @@ async function renderUserDashboard() {
             statusCard.style.background = 'linear-gradient(135deg, #ecc94b 0%, #b7791f 100%)';
             document.getElementById('user-cc-status').innerText = 'En Revisión';
             if (statusIcon) statusIcon.className = 'fas fa-hourglass-half';
-        } else if (currentMonthPayment?.status === 'approved') {
+        } else if (isAlDia) {
             statusCard.style.background = 'linear-gradient(135deg, #38a169 0%, #22543d 100%)';
             document.getElementById('user-cc-status').innerText = 'Al Día';
             if (statusIcon) statusIcon.className = 'fas fa-check-double';
         } else {
             statusCard.style.background = 'linear-gradient(135deg, #2c5282 0%, #1a365d 100%)';
-            document.getElementById('user-cc-status').innerText = 'Pendiente ' + currentMonthName;
+            const pendingMonth = getFirstPendingMonth(payments, currentMonthName);
+            document.getElementById('user-cc-status').innerText = 'Pendiente ' + pendingMonth;
             if (statusIcon) statusIcon.className = 'fas fa-calendar-day';
         }
     }
@@ -1900,7 +1904,13 @@ async function renderAdminCC(manualPayments = null) {
 
         let totalDebt = 0;
         let monthTds = '';
-        const userPayments = payments.filter(p => p.userId === (u.id || u.username));
+        const uidTarget = (u.id || u.username || '').toLowerCase().trim();
+        const unameTarget = (u.username || u.id || '').toLowerCase().trim();
+        const userPayments = payments.filter(p => p && (
+            (p.userId && p.userId.toLowerCase().trim() === uidTarget) ||
+            (p.userId && p.userId.toLowerCase().trim() === unameTarget) ||
+            (p.username && p.username.toLowerCase().trim() === unameTarget)
+        ));
 
         // Evaluación por mes para el usuario
         let targetMonthStatus = 'VOID'; // OK, DEBT, PENDING, VOID

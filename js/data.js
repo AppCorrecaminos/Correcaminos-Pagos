@@ -149,7 +149,12 @@ const DataManager = {
 
     async getPaymentsByUser(userId) {
         const all = await this.getPayments();
-        return all.filter(p => p.userId === userId);
+        if (!userId) return [];
+        const targetId = userId.toLowerCase().trim();
+        return all.filter(p => p && (
+            (p.userId && p.userId.toLowerCase().trim() === targetId) ||
+            (p.username && p.username.toLowerCase().trim() === targetId)
+        ));
     },
 
     async addPayment(payment) {

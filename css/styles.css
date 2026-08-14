@@ -1164,17 +1164,50 @@ select {
 /* Responsive bottom navigation menu for mobile screens */
 @media (max-width: 768px) {
     .navbar {
-        padding: 0.75rem 1rem;
+        padding: 0.5rem 0.75rem;
         border-bottom: 1px solid var(--border);
     }
     .nav-content {
         width: 100%;
+        gap: 0.5rem;
+    }
+    .nav-brand {
+        gap: 0.5rem;
+        flex: 1;
+        min-width: 0;
+    }
+    .nav-logo {
+        width: 38px;
+        height: 38px;
+        flex-shrink: 0;
+    }
+    .brand-text {
+        overflow: hidden;
     }
     .brand-main {
-        font-size: 0.95rem;
+        font-size: 0.82rem;
+        line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .brand-sub {
-        font-size: 0.75rem;
+        font-size: 0.68rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .nav-user {
+        gap: 0.4rem;
+        flex-shrink: 0;
+    }
+    .nav-user span#user-display-name {
+        font-size: 0.8rem;
+        font-weight: 600;
+        max-width: 90px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     /* Hide navigation menu from the top bar */
     .navbar .nav-menu {
@@ -1233,9 +1266,51 @@ select {
         margin: 1rem auto 5.5rem auto;
         padding: 0 0.75rem;
     }
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin-bottom: 1.25rem;
+    }
+    .dashboard-header h2 {
+        font-size: 1.4rem;
+        line-height: 1.2;
+    }
+    .dashboard-header p {
+        font-size: 0.85rem;
+    }
     .stats-grid {
         grid-template-columns: 1fr;
         gap: 1rem;
+    }
+    
+    /* Modales Limpios para Teléfonos (PWA Mobile Dialogs) */
+    .modal {
+        padding: 0.75rem;
+        align-items: flex-end;
+    }
+    .modal-content {
+        padding: 1.25rem 1rem;
+        max-height: 88vh;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        border-top-left-radius: 1.5rem;
+        border-top-right-radius: 1.5rem;
+    }
+    .modal-header h3 {
+        font-size: 1.2rem;
+        color: var(--primary);
+    }
+    .form-group label {
+        font-size: 0.82rem;
+    }
+    .modal-actions {
+        flex-direction: column-reverse;
+        gap: 0.5rem;
+    }
+    .modal-actions button {
+        width: 100%;
+        padding: 0.85rem;
     }
 }
 

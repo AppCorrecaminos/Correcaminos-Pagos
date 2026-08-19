@@ -2121,4 +2121,263 @@ select {
     color: #64748b;
 }
 
+/* ==========================================================================
+   Mobile-First & Smartphone UX Optimization
+   ========================================================================== */
+
+/* Touch Ergonomics & Tap Reset */
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent auto-zoom on input focus in iOS Safari and optimize touch layout */
+@media (max-width: 768px) {
+    input[type="text"],
+    input[type="number"],
+    input[type="email"],
+    input[type="password"],
+    input[type="date"],
+    input[type="month"],
+    input[type="search"],
+    input[type="tel"],
+    select,
+    textarea {
+        font-size: 16px !important; /* Prevents iOS auto-zoom */
+    }
+
+    /* Safe Area insets for iPhone notch / home bar */
+    .nav-menu {
+        height: calc(65px + env(safe-area-inset-bottom, 0px)) !important;
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    }
+
+    .container {
+        margin-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    /* Modals Smartphone Layout */
+    .modal {
+        padding: 0.5rem;
+        align-items: flex-end;
+    }
+
+    .modal-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 92vh !important;
+        margin: 0 !important;
+        padding: 1.15rem 1rem !important;
+        border-radius: 20px 20px 0 0 !important;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .modal-header {
+        margin-bottom: 0.85rem !important;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .modal-header h3 {
+        font-size: 1.1rem !important;
+    }
+
+    .modal-body {
+        flex: 1 1 auto;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        padding: 0.5rem 0 !important;
+    }
+
+    .modal-actions {
+        padding-top: 0.75rem !important;
+        margin-top: 0.5rem !important;
+        border-top: 1px solid var(--border);
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.5rem !important;
+    }
+
+    .modal-actions button,
+    .modal-actions .btn-primary,
+    .modal-actions .btn-secondary {
+        width: 100% !important;
+        min-height: 44px; /* Apple minimum touch target */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Ranking Flow on Mobile Phones */
+    .ranking-grid-banners {
+        grid-template-columns: 1fr !important;
+        gap: 0.75rem !important;
+    }
+
+    .ranking-card-banner {
+        padding: 1rem 0.9rem !important;
+        min-height: 62px;
+        border-radius: 12px !important;
+    }
+
+    .ranking-card-banner-icon {
+        width: 42px !important;
+        height: 42px !important;
+        font-size: 1.15rem !important;
+        border-radius: 10px !important;
+    }
+
+    .ranking-card-banner-info h4 {
+        font-size: 0.98rem !important;
+    }
+
+    .ranking-card-banner-info p {
+        font-size: 0.75rem !important;
+    }
+
+    .ranking-breadcrumb-bar {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.78rem !important;
+        gap: 0.25rem !important;
+        margin-bottom: 0.85rem !important;
+    }
+
+    .ranking-table th {
+        font-size: 0.72rem !important;
+        padding: 0.5rem 0.4rem !important;
+    }
+
+    .ranking-table td {
+        padding: 0.6rem 0.4rem !important;
+        font-size: 0.8rem !important;
+    }
+
+    .rank-mark-value {
+        font-size: 0.92rem !important;
+    }
+
+    .podium-badge {
+        width: 26px !important;
+        height: 26px !important;
+        font-size: 0.8rem !important;
+    }
+
+    /* Forms Responsive Grid on Mobile */
+    .form-grid-2 {
+        grid-template-columns: 1fr !important;
+        gap: 0.5rem !important;
+    }
+
+    .config-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+    }
+
+    /* Sports Hub on Mobile */
+    .sports-hub-section {
+        padding: 1rem !important;
+    }
+
+    .countdown-card {
+        padding: 1.15rem !important;
+    }
+
+    .countdown-timer-grid {
+        gap: 0.35rem !important;
+        justify-content: space-between !important;
+    }
+
+    .timer-box {
+        min-width: 0 !important;
+        flex: 1;
+        padding: 0.45rem 0.2rem !important;
+        border-radius: 8px !important;
+    }
+
+    .timer-number {
+        font-size: 1.35rem !important;
+    }
+
+    .timer-label {
+        font-size: 0.58rem !important;
+    }
+
+    .timer-dots {
+        font-size: 1.1rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+
+    .hub-events-row {
+        grid-template-columns: 1fr !important;
+    }
+
+    .hub-event-item {
+        padding: 0.85rem !important;
+    }
+
+    .hub-banner-card {
+        padding: 1rem 0.85rem !important;
+    }
+
+    .events-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Quick Filter bars on Mobile */
+    .ranking-filters-bar {
+        padding: 0.75rem !important;
+    }
+
+    /* Toast notification on Mobile (docked above bottom nav) */
+    #toast-container {
+        left: 1rem !important;
+        right: 1rem !important;
+        bottom: calc(75px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    .toast {
+        min-width: 0 !important;
+        width: 100% !important;
+        padding: 0.75rem 1rem !important;
+        font-size: 0.85rem !important;
+    }
+
+    /* Tables Mobile Touch-Scroll indicators */
+    .table-responsive {
+        -webkit-overflow-scrolling: touch;
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+    }
+}
+
+/* Extra small devices (iPhone SE, small Androids <= 375px) */
+@media (max-width: 375px) {
+    .brand-main {
+        font-size: 0.75rem !important;
+    }
+    
+    .brand-sub {
+        display: none !important;
+    }
+
+    .timer-number {
+        font-size: 1.15rem !important;
+    }
+
+    .countdown-header h3 {
+        font-size: 1.15rem !important;
+    }
+
+    .ranking-card-banner {
+        padding: 0.85rem 0.75rem !important;
+    }
+
+    .ranking-card-banner-icon {
+        width: 38px !important;
+        height: 38px !important;
+        font-size: 1rem !important;
+    }
+}
+
 

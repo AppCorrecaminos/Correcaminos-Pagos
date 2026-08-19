@@ -1060,6 +1060,9 @@ function setupEventListeners() {
     document.querySelectorAll('.close-modal').forEach(b => b.addEventListener('click', () => {
         document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     }));
+    document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', (e) => {
+        if (e.target === m) m.classList.remove('active');
+    }));
     document.querySelectorAll('.btn-logout').forEach(b => b.addEventListener('click', () => window.Auth.logout()));
 
     // Foto recibo

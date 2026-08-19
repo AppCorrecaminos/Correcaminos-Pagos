@@ -178,6 +178,10 @@
                             <i class="fas fa-gift"></i>
                             <span>Beneficios</span>
                         </button>
+                        <button class="nav-link" data-target="user-events-tab">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Calendario</span>
+                        </button>
                     </div>
                     <div class="nav-user">
                         <div id="db-status" class="db-status" title="Estado de la base de datos">
@@ -198,6 +202,44 @@
                         <h2>Mi Perfil y Atletas</h2>
                         <p>Fichas técnicas, certificados médicos y reglamentos de convivencia</p>
                     </header>
+
+                    <!-- Banner Cuenta Regresiva Próximo Evento Institucional -->
+                    <div id="next-event-countdown" class="countdown-card" style="margin-bottom: 2rem;">
+                        <div class="countdown-header">
+                            <div class="countdown-badge" id="cd-badge"><i class="fas fa-star" style="color: #f59e0b;"></i> PRÓXIMO EVENTO CORRECAMINOS</div>
+                            <h3 id="cd-event-title">Buscando próximo evento...</h3>
+                            <p id="cd-event-meta"><i class="fas fa-calendar-day"></i> --/--/---- &nbsp;|&nbsp; <i class="fas fa-map-marker-alt"></i> --</p>
+                        </div>
+                        <div class="countdown-timer-grid">
+                            <div class="timer-box">
+                                <span class="timer-number" id="cd-days">00</span>
+                                <span class="timer-label">DÍAS</span>
+                            </div>
+                            <div class="timer-dots">:</div>
+                            <div class="timer-box">
+                                <span class="timer-number" id="cd-hours">00</span>
+                                <span class="timer-label">HORAS</span>
+                            </div>
+                            <div class="timer-dots">:</div>
+                            <div class="timer-box">
+                                <span class="timer-number" id="cd-minutes">00</span>
+                                <span class="timer-label">MIN</span>
+                            </div>
+                            <div class="timer-dots">:</div>
+                            <div class="timer-box">
+                                <span class="timer-number" id="cd-seconds">00</span>
+                                <span class="timer-label">SEG</span>
+                            </div>
+                        </div>
+
+                        <!-- Mención Informativa del Próximo Torneo General (Sin Reloj) -->
+                        <div id="next-general-event-mention" style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.15); font-size: 0.85rem; color: #cbd5e1; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                            <strong style="color: #ffffff; display: flex; align-items: center; gap: 0.35rem;">
+                                <i class="fas fa-globe" style="color: #60a5fa;"></i> Próxima competencia del calendario:
+                            </strong>
+                            <span id="general-event-info" style="color: #f1f5f9;">Cargando...</span>
+                        </div>
+                    </div>
 
                     <!-- Section for Athlete Profiles -->
                     <div class="card" style="margin-bottom: 2rem;">
@@ -304,6 +346,23 @@
                         <!-- Se cargará dinámicamente -->
                     </div>
                 </div>
+
+                <!-- Pestaña 4: Calendario Deportivo y Torneos -->
+                <div id="user-events-tab" class="user-tab">
+                    <header class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <h2>Calendario Deportivo y Torneos</h2>
+                            <p>Cronograma de competencias, campeonatos y eventos oficiales de Correcaminos</p>
+                        </div>
+                        <button id="btn-add-event" class="btn-primary btn-sm admin-only-btn" style="display: none;">
+                            <i class="fas fa-plus-circle"></i> Cargar Evento
+                        </button>
+                    </header>
+
+                    <div id="events-container" class="events-grid">
+                        <!-- Se cargará dinámicamente -->
+                    </div>
+                </div>
             </main>
         </section>
 
@@ -338,6 +397,10 @@
                         <button class="nav-link" data-target="admin-benefits">
                             <i class="fas fa-handshake"></i>
                             <span>Convenios</span>
+                        </button>
+                        <button class="nav-link" data-target="admin-events">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Eventos</span>
                         </button>
                     </div>
                     <div class="nav-user">
@@ -724,6 +787,38 @@
                                         <th>Categoría</th>
                                         <th>Descuento</th>
                                         <th>Frecuencia</th>
+                                        <th>Estado</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Se cargará dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pestaña de Gestión de Eventos Deportivo (Admin) -->
+                <div id="admin-events" class="admin-tab">
+                    <header class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <h2>Gestión de Calendario Deportivo y Torneos</h2>
+                            <p>Carga y administra los próximos torneos y maratones para que los socios los vean en su perfil</p>
+                        </div>
+                        <button id="btn-admin-add-event" class="btn-primary btn-sm">
+                            <i class="fas fa-plus-circle"></i> Cargar Nuevo Evento
+                        </button>
+                    </header>
+                    <div class="card">
+                        <div class="table-responsive">
+                            <table id="admin-events-table">
+                                <thead>
+                                    <tr>
+                                        <th>Fecha y Hora</th>
+                                        <th>Torneo / Campeonato</th>
+                                        <th>Lugar / Sede</th>
+                                        <th>Categorías</th>
                                         <th>Estado</th>
                                         <th>Acciones</th>
                                     </tr>
@@ -1192,6 +1287,53 @@
                     <div class="modal-actions">
                         <button type="button" class="btn-text close-modal">Cancelar</button>
                         <button type="submit" class="btn-primary">Guardar Convenio</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal para Crear/Editar Evento Deportivo -->
+        <div id="modal-event" class="modal">
+            <div class="modal-content" style="max-width: 520px;">
+                <div class="modal-header">
+                    <h3 id="modal-event-title-header">Nuevo Evento Deportivo</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <form id="form-event">
+                    <input type="hidden" id="event-id">
+                    <div class="form-group" style="background: #f8fafc; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border);">
+                        <label for="event-is-own" style="display: flex; align-items: center; gap: 0.6rem; cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--primary); margin: 0;">
+                            <input type="checkbox" id="event-is-own" style="width: 18px; height: 18px; accent-color: var(--secondary); cursor: pointer;">
+                            <span><i class="fas fa-star" style="color: #f59e0b;"></i> Evento Institucional Correcaminos (Organizado por nosotros)</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-title">Nombre del Torneo / Campeonato</label>
+                        <input type="text" id="event-title" placeholder="Ej: Torneo Provincial de Atletismo" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-date">Fecha y Hora de Inicio</label>
+                        <input type="datetime-local" id="event-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-location">Lugar / Sede / Pista</label>
+                        <input type="text" id="event-location" placeholder="Ej: Pista Municipal de Atletismo" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-category">Categorías Convocadas</label>
+                        <input type="text" id="event-category" placeholder="Ej: U14, U16, Running, Máster" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-description">Descripción / Detalle de Pruebas</label>
+                        <textarea id="event-description" rows="3" placeholder="Detalles de la competencia, cronograma de pruebas, etc."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="event-link">Enlace Oficial / Reglamento (Opcional)</label>
+                        <input type="url" id="event-link" placeholder="https://...">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-text close-modal">Cancelar</button>
+                        <button type="submit" class="btn-primary">Guardar Evento</button>
                     </div>
                 </form>
             </div>

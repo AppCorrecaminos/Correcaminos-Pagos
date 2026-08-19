@@ -320,6 +320,100 @@ const DataManager = {
         const c = coupons.find(x => x.id === couponId);
         if (c) Object.assign(c, updates);
         localStorage.setItem('correcaminos_coupons', JSON.stringify(coupons));
+    },
+
+    /**
+     * Eventos y Torneos Deportivos (Calendario)
+     */
+    async getEvents() {
+        if (this.db) {
+            try {
+                const q = window.firebase.firestore.collection(this.db, "events");
+                const snapshot = await window.firebase.firestore.getDocs(q);
+                const cloudEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (cloudEvents.length > 0) {
+                    localStorage.setItem('correcaminos_events', JSON.stringify(cloudEvents));
+                    return cloudEvents;
+                }
+            } catch (e) {
+                console.warn("Error leyendo eventos de nube, usando copia local.", e);
+            }
+        }
+        
+        const local = localStorage.getItem('correcaminos_events');
+        if (local) return JSON.parse(local);
+
+        // Eventos iniciales de muestra si no hay ninguno registrado
+        const defaultEvents = [
+            {
+                id: 'event_1',
+                title: 'Torneo Provincial de Atletismo 2026',
+                date: '2026-09-15T09:00',
+                location: 'Pista de Atletismo Municipal',
+                category: 'Todas las Categorías (U14, U16, U18, Mayores)',
+                description: 'Torneo clasificatorio provincial con pruebas de velocidad, saltos y lanzamientos.',
+                link: '',
+                isOwnEvent: false,
+                lastUpdate: Date.now()
+            },
+            {
+                id: 'event_2',
+                title: 'Maratón Aniversario Correcaminos 10K & 5K',
+                date: '2026-10-18T08:30',
+                location: 'Parque Principal - Correcaminos',
+                category: 'Infantiles, Running & Máster',
+                description: 'Gran maratón anual con medalla finisher y trofeos por categorías.',
+                link: '',
+                isOwnEvent: true,
+                lastUpdate: Date.now()
+            },
+            {
+                id: 'event_3',
+                title: 'Campeonato Nacional de Pista y Campo U14',
+                date: '2026-11-21T08:00',
+                location: 'Centro Nacional de Alto Rendimiento',
+                category: 'Categoría U14',
+                description: 'Encuentro nacional de escuelas de atletismo. Viaje y concentración de delegación.',
+                link: '',
+                isOwnEvent: false,
+                lastUpdate: Date.now()
+            }
+        ];
+        localStorage.setItem('correcaminos_events', JSON.stringify(defaultEvents));
+        return defaultEvents;
+    },
+
+    async saveEvent(id, eventData) {
+        const finalId = id || ('event_' + Date.now());
+        const finalData = { ...eventData, id: finalId, lastUpdate: Date.now() };
+        if (this.db) {
+            try {
+                const docRef = window.firebase.firestore.doc(this.db, "events", finalId);
+                await window.firebase.firestore.setDoc(docRef, finalData);
+            } catch (e) {
+                console.error("Error al guardar evento en la nube:", e);
+            }
+        }
+        const events = JSON.parse(localStorage.getItem('correcaminos_events') || '[]');
+        const idx = events.findIndex(e => e.id === finalId);
+        if (idx > -1) events[idx] = finalData;
+        else events.push(finalData);
+        localStorage.setItem('correcaminos_events', JSON.stringify(events));
+        return finalData;
+    },
+
+    async deleteEvent(id) {
+        if (this.db) {
+            try {
+                const docRef = window.firebase.firestore.doc(this.db, "events", id);
+                await window.firebase.firestore.deleteDoc(docRef);
+            } catch (e) {
+                console.error("Error borrar evento en nube:", e);
+            }
+        }
+        let events = JSON.parse(localStorage.getItem('correcaminos_events') || '[]');
+        events = events.filter(e => e.id !== id);
+        localStorage.setItem('correcaminos_events', JSON.stringify(events));
     }
 };
 

@@ -264,6 +264,7 @@ async function updateUI() {
             await renderAdminDashboard();
             await renderAdminUsers();
             await renderAdminCC();
+            await renderAdminEvents();
             renderActivitiesConfig(activities);
             const socIn = document.getElementById('config-social');
             if (socIn) socIn.value = config.socialFee || 3000;
@@ -273,6 +274,8 @@ async function updateUI() {
             });
         } else {
             await renderUserDashboard();
+            startCountdownTimer();
+            renderUserEvents();
             const payments = await window.DataManager.getPaymentsByUser(currentUser.id);
             const nameDisp = document.getElementById('user-display-name');
             if (nameDisp) nameDisp.innerText = currentUser.name;
@@ -747,6 +750,8 @@ function openEditUserModal(user) {
 }
 
 function setupEventListeners() {
+    setupEventModalListeners();
+
     // Login
     document.getElementById('login-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -781,6 +786,7 @@ function setupEventListeners() {
                 document.querySelectorAll('.user-tab').forEach(t => t.classList.remove('active'));
                 targetEl.classList.add('active');
                 if (targetId === 'user-benefits-tab') renderUserBenefits();
+                if (targetId === 'user-events-tab') renderUserEvents();
                 if (targetId === 'user-finance-tab' || targetId === 'user-profile-tab') updateUI();
             }
 
@@ -791,7 +797,9 @@ function setupEventListeners() {
             setTimeout(() => {
                 if (targetId === 'admin-cc') renderAdminCC();
                 else if (targetId === 'admin-benefits') renderAdminBenefits();
+                else if (targetId === 'admin-events') renderAdminEvents();
                 else if (targetId === 'user-benefits-tab') renderUserBenefits();
+                else if (targetId === 'user-events-tab') renderUserEvents();
             }, 10);
         });
     });
@@ -2779,4 +2787,381 @@ async function generateReportsPDFContent(doc, logoImg) {
 
     doc.save(`Correcaminos_Reporte_Cobros_${selectedMonth}_${Date.now()}.pdf`);
     toast("Reporte de Cobros en PDF exportado con éxito");
+}
+
+/**
+ * ==========================================================================
+ * Calendario Deportivo y Cuenta Regresiva de Eventos
+ * ==========================================================================
+ */
+
+let countdownInterval = null;
+
+async function updateCountdownTimer() {
+    const cdTitle = document.getElementById('cd-event-title');
+    const cdMeta = document.getElementById('cd-event-meta');
+    const cdBadge = document.getElementById('cd-badge');
+    const elDays = document.getElementById('cd-days');
+    const elHours = document.getElementById('cd-hours');
+    const elMins = document.getElementById('cd-minutes');
+    const elSecs = document.getElementById('cd-seconds');
+    const generalInfoEl = document.getElementById('general-event-info');
+
+    if (!cdTitle || !elDays) return;
+
+    const events = await window.DataManager.getEvents();
+    const now = new Date();
+
+    // 1. Reloj de Cuenta Regresiva Principal (EXCLUSIVO EVENTOS PROPIOS INSTITUCIONALES)
+    const futureOwnEvents = events
+        .filter(e => e.date && new Date(e.date) > now && e.isOwnEvent === true)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (futureOwnEvents.length === 0) {
+        cdTitle.innerText = "No hay torneos institucionales próximos cargados";
+        cdMeta.innerHTML = `<i class="fas fa-info-circle"></i> Consulta las fechas del calendario general o el cronograma de atletismo.`;
+        elDays.innerText = "00";
+        elHours.innerText = "00";
+        elMins.innerText = "00";
+        elSecs.innerText = "00";
+    } else {
+        const nextOwnEvent = futureOwnEvents[0];
+        const targetDate = new Date(nextOwnEvent.date);
+
+        cdTitle.innerText = nextOwnEvent.title;
+        
+        const formattedDate = targetDate.toLocaleDateString('es-AR', {
+            weekday: 'short',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        });
+        const formattedTime = targetDate.toLocaleTimeString('es-AR', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        cdMeta.innerHTML = `<i class="fas fa-calendar-day"></i> ${formattedDate} (${formattedTime} hs) &nbsp;|&nbsp; <i class="fas fa-map-marker-alt"></i> ${nextOwnEvent.location}`;
+
+        const diff = targetDate - now;
+        if (diff > 0) {
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+            const mins = Math.floor((diff / (1000 * 60)) % 60);
+            const secs = Math.floor((diff / 1000) % 60);
+
+            elDays.innerText = String(days).padStart(2, '0');
+            elHours.innerText = String(hours).padStart(2, '0');
+            elMins.innerText = String(mins).padStart(2, '0');
+            elSecs.innerText = String(secs).padStart(2, '0');
+        } else {
+            elDays.innerText = "00";
+            elHours.innerText = "00";
+            elMins.innerText = "00";
+            elSecs.innerText = "00";
+        }
+    }
+
+    // 2. Mención Informativa del Próximo Torneo General (SIN RELOJ)
+    if (generalInfoEl) {
+        const futureAllEvents = events
+            .filter(e => e.date && new Date(e.date) > now)
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        if (futureAllEvents.length === 0) {
+            generalInfoEl.innerHTML = "<em>No hay competencias próximas cargadas en el calendario.</em>";
+        } else {
+            const nextGeneral = futureAllEvents[0];
+            const gDate = new Date(nextGeneral.date);
+            const gDateStr = gDate.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+            const gTimeStr = gDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+            const ownTag = nextGeneral.isOwnEvent ? ' <small style="color:#f59e0b; font-weight:700;">(Evento Propio)</small>' : '';
+            generalInfoEl.innerHTML = `<strong>${nextGeneral.title}</strong> — ${gDateStr} (${gTimeStr} hs) en ${nextGeneral.location}${ownTag}`;
+        }
+    }
+}
+
+function startCountdownTimer() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    updateCountdownTimer();
+    countdownInterval = setInterval(updateCountdownTimer, 1000);
+}
+
+async function renderUserEvents() {
+    const container = document.getElementById('events-container');
+    const addBtn = document.getElementById('btn-add-event');
+    if (!container) return;
+
+    if (currentUser && currentUser.role === 'admin') {
+        if (addBtn) addBtn.style.display = 'inline-flex';
+    } else {
+        if (addBtn) addBtn.style.display = 'none';
+    }
+
+    const events = await window.DataManager.getEvents();
+    container.innerHTML = '';
+
+    if (events.length === 0) {
+        container.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 3rem; background: #f8fafc; border-radius: 12px; border: 2px dashed #cbd5e1;">
+                <i class="fas fa-calendar-times" style="font-size: 2.5rem; color: #94a3b8; margin-bottom: 1rem;"></i>
+                <p style="color: #64748b; font-weight: 500;">No hay eventos deportivos o torneos registrados por el momento.</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Ordenar eventos por fecha ascendente
+    events.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const now = new Date();
+
+    events.forEach(e => {
+        const evtDate = new Date(e.date);
+        const dayNum = evtDate.getDate();
+        const monthStr = evtDate.toLocaleDateString('es-AR', { month: 'short' }).replace('.', '');
+        const timeStr = evtDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+        
+        let statusHtml = '';
+        if (evtDate < now && (now - evtDate) > (1000 * 60 * 60 * 12)) {
+            statusHtml = `<span class="event-status-pill past"><i class="fas fa-check"></i> Finalizado</span>`;
+        } else if (evtDate.toDateString() === now.toDateString()) {
+            statusHtml = `<span class="event-status-pill today"><i class="fas fa-running"></i> ¡Hoy!</span>`;
+        } else {
+            statusHtml = `<span class="event-status-pill upcoming"><i class="fas fa-clock"></i> Próximo</span>`;
+        }
+
+        const ownTag = e.isOwnEvent ? `
+            <span class="badge" style="background:#fffbebf0; color:#b45309; border: 1px solid #fde68a; font-size: 0.7rem; font-weight:700; display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem;">
+                <i class="fas fa-star" style="color:#f59e0b;"></i> Organizado por Correcaminos
+            </span>
+        ` : '';
+
+        const isAdmin = currentUser && currentUser.role === 'admin';
+        const adminControls = isAdmin ? `
+            <div style="display: flex; gap: 0.4rem;">
+                <button class="btn-action edit btn-edit-event" data-id="${e.id}" title="Editar evento"><i class="fas fa-edit"></i></button>
+                <button class="btn-action reject btn-del-event" data-id="${e.id}" title="Eliminar evento" style="color: var(--danger);"><i class="fas fa-trash-alt"></i></button>
+            </div>
+        ` : '';
+
+        const linkBtn = e.link ? `
+            <a href="${e.link}" target="_blank" class="btn-text" style="font-size: 0.8rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.3rem;">
+                <i class="fas fa-external-link-alt"></i> Info / Reglamento
+            </a>
+        ` : '<span></span>';
+
+        const card = document.createElement('div');
+        card.className = 'event-card';
+        card.innerHTML = `
+            <div>
+                <div class="event-card-header">
+                    <div class="event-date-badge">
+                        <span class="day">${dayNum}</span>
+                        <span class="month">${monthStr}</span>
+                    </div>
+                    <div class="event-title-info">
+                        <h4>${e.title}</h4>
+                        <div style="display:flex; flex-wrap:wrap; gap:0.3rem; align-items:center;">
+                            <span class="event-category-tag" style="margin:0;">${e.category || 'Atletismo'}</span>
+                            ${ownTag}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="event-meta">
+                    <span><i class="fas fa-clock"></i> ${timeStr} hs</span>
+                    <span><i class="fas fa-map-marker-alt"></i> ${e.location}</span>
+                </div>
+
+                ${e.description ? `<p class="event-description">${e.description}</p>` : ''}
+            </div>
+
+            <div class="event-card-actions">
+                ${statusHtml}
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    ${linkBtn}
+                    ${adminControls}
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+
+    // Event listeners para editar y borrar eventos
+    container.querySelectorAll('.btn-edit-event').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const evId = btn.dataset.id;
+            const ev = (await window.DataManager.getEvents()).find(x => x.id === evId);
+            if (!ev) return;
+
+            document.getElementById('event-id').value = ev.id;
+            document.getElementById('event-title').value = ev.title || '';
+            document.getElementById('event-date').value = ev.date || '';
+            document.getElementById('event-location').value = ev.location || '';
+            document.getElementById('event-category').value = ev.category || '';
+            document.getElementById('event-description').value = ev.description || '';
+            document.getElementById('event-link').value = ev.link || '';
+            document.getElementById('event-is-own').checked = ev.isOwnEvent === true;
+            document.getElementById('modal-event-title-header').innerText = "Editar Evento Deportivo";
+
+            document.getElementById('modal-event').classList.add('active');
+        });
+    });
+
+    container.querySelectorAll('.btn-del-event').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const evId = btn.dataset.id;
+            if (confirm('¿Eliminar este evento deportivo del calendario?')) {
+                await window.DataManager.deleteEvent(evId);
+                toast('Evento eliminado');
+                renderUserEvents();
+                renderAdminEvents();
+                updateCountdownTimer();
+            }
+        });
+    });
+}
+
+function setupEventModalListeners() {
+    const btnAdd = document.getElementById('btn-add-event');
+    const btnAdminAdd = document.getElementById('btn-admin-add-event');
+    const formEvent = document.getElementById('form-event');
+    const modalEvent = document.getElementById('modal-event');
+
+    // Listener para los botones de alternancia de vista de la cuenta regresiva
+    document.querySelectorAll('.cd-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.cd-toggle-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentCountdownView = btn.dataset.view || 'general';
+            updateCountdownTimer();
+        });
+    });
+
+    const openCreateModal = () => {
+        if (formEvent) formEvent.reset();
+        document.getElementById('event-id').value = '';
+        document.getElementById('event-is-own').checked = false;
+        document.getElementById('modal-event-title-header').innerText = "Nuevo Evento Deportivo";
+        if (modalEvent) modalEvent.classList.add('active');
+    };
+
+    if (btnAdd) btnAdd.addEventListener('click', openCreateModal);
+    if (btnAdminAdd) btnAdminAdd.addEventListener('click', openCreateModal);
+
+    if (formEvent) {
+        formEvent.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('event-id').value;
+            const title = document.getElementById('event-title').value.trim();
+            const date = document.getElementById('event-date').value;
+            const location = document.getElementById('event-location').value.trim();
+            const category = document.getElementById('event-category').value.trim();
+            const description = document.getElementById('event-description').value.trim();
+            const link = document.getElementById('event-link').value.trim();
+            const isOwnEvent = document.getElementById('event-is-own').checked;
+
+            await window.DataManager.saveEvent(id, {
+                title,
+                date,
+                location,
+                category,
+                description,
+                link,
+                isOwnEvent
+            });
+
+            if (modalEvent) modalEvent.classList.remove('active');
+            toast(id ? 'Evento actualizado' : 'Evento creado con éxito');
+            renderAdminEvents();
+            renderUserEvents();
+            updateCountdownTimer();
+        });
+    }
+}
+
+async function renderAdminEvents() {
+    const tbody = document.querySelector('#admin-events-table tbody');
+    if (!tbody) return;
+
+    const events = await window.DataManager.getEvents();
+    tbody.innerHTML = '';
+
+    if (events.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" align="center" style="padding: 2rem; color: var(--text-muted);">No hay eventos deportivos cargados. Presiona "Cargar Nuevo Evento".</td></tr>`;
+        return;
+    }
+
+    events.sort((a, b) => new Date(a.date) - new Date(b.date));
+    const now = new Date();
+
+    events.forEach(e => {
+        const evtDate = new Date(e.date);
+        const dateStr = evtDate.toLocaleDateString('es-AR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        }) + ' ' + evtDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs';
+
+        let statusBadge = '';
+        if (evtDate < now && (now - evtDate) > (1000 * 60 * 60 * 12)) {
+            statusBadge = `<span class="badge" style="background:#f1f5f9; color:#64748b;"><i class="fas fa-check"></i> Finalizado</span>`;
+        } else if (evtDate.toDateString() === now.toDateString()) {
+            statusBadge = `<span class="badge" style="background:#fef9c3; color:#a16207;"><i class="fas fa-running"></i> ¡Hoy!</span>`;
+        } else {
+            statusBadge = `<span class="badge badge-approved" style="background:#dcfce7; color:#15803d;"><i class="fas fa-clock"></i> Próximo</span>`;
+        }
+
+        const ownTag = e.isOwnEvent ? `<br><small style="color:#b45309; font-weight:700;"><i class="fas fa-star" style="color:#f59e0b;"></i> Organizado por Correcaminos</small>` : '';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><b>${dateStr}</b></td>
+            <td><strong style="color:var(--primary);">${e.title}</strong>${ownTag}</td>
+            <td><i class="fas fa-map-marker-alt" style="color:var(--secondary);"></i> ${e.location}</td>
+            <td><span class="event-category-tag" style="margin:0;">${e.category || 'Atletismo'}</span></td>
+            <td>${statusBadge}</td>
+            <td>
+                <div style="display:flex; gap:0.5rem;">
+                    <button class="btn-action edit btn-edit-event-admin" data-id="${e.id}" title="Editar evento"><i class="fas fa-edit"></i></button>
+                    <button class="btn-action reject btn-del-event-admin" data-id="${e.id}" title="Eliminar evento" style="color:var(--danger);"><i class="fas fa-trash-alt"></i></button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('.btn-edit-event-admin').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const evId = btn.dataset.id;
+            const ev = (await window.DataManager.getEvents()).find(x => x.id === evId);
+            if (!ev) return;
+
+            document.getElementById('event-id').value = ev.id;
+            document.getElementById('event-title').value = ev.title || '';
+            document.getElementById('event-date').value = ev.date || '';
+            document.getElementById('event-location').value = ev.location || '';
+            document.getElementById('event-category').value = ev.category || '';
+            document.getElementById('event-description').value = ev.description || '';
+            document.getElementById('event-link').value = ev.link || '';
+            document.getElementById('event-is-own').checked = ev.isOwnEvent === true;
+            document.getElementById('modal-event-title-header').innerText = "Editar Evento Deportivo";
+
+            document.getElementById('modal-event').classList.add('active');
+        });
+    });
+
+    tbody.querySelectorAll('.btn-del-event-admin').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const evId = btn.dataset.id;
+            if (confirm('¿Eliminar este evento deportivo del calendario?')) {
+                await window.DataManager.deleteEvent(evId);
+                toast('Evento eliminado');
+                renderAdminEvents();
+                renderUserEvents();
+                updateCountdownTimer();
+            }
+        });
+    });
 }

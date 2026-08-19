@@ -1350,4 +1350,308 @@ select {
 .coupon-badge {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
     border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ==========================================================================
+   Countdown Card & Sports Events Styles
+   ========================================================================== */
+
+.countdown-card {
+    background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
+    color: white;
+    border-radius: var(--radius-lg);
+    padding: 1.75rem;
+    box-shadow: 0 10px 25px -5px rgba(30, 58, 138, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.countdown-card::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, rgba(255,255,255,0) 70%);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.countdown-toggle-bar {
+    display: flex;
+    gap: 0.5rem;
+    background: rgba(0, 0, 0, 0.25);
+    padding: 0.35rem;
+    border-radius: 30px;
+    margin-bottom: 1.25rem;
+    width: fit-content;
+    max-width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    flex-wrap: wrap;
+}
+
+.cd-toggle-btn {
+    background: transparent;
+    border: none;
+    color: #cbd5e1;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.45rem 0.95rem;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.cd-toggle-btn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.cd-toggle-btn.active {
+    background: #f59e0b;
+    color: #0f172a;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+}
+
+.countdown-header {
+    margin-bottom: 1.25rem;
+}
+
+.countdown-badge {
+    display: inline-block;
+    background: #f59e0b;
+    color: #0f172a;
+    font-size: 0.75rem;
+    font-weight: 800;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    letter-spacing: 1px;
+    margin-bottom: 0.5rem;
+    box-shadow: 0 2px 5px rgba(245, 158, 11, 0.4);
+}
+
+.countdown-header h3 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    color: #ffffff;
+}
+
+.countdown-header p {
+    font-size: 0.9rem;
+    color: #cbd5e1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.countdown-timer-grid {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.5rem;
+}
+
+.timer-box {
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    min-width: 68px;
+    padding: 0.6rem 0.5rem;
+    text-align: center;
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.2);
+}
+
+.timer-number {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.85rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #ffffff;
+    display: block;
+}
+
+.timer-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #94a3b8;
+    letter-spacing: 0.5px;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+.timer-dots {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #f59e0b;
+    margin-bottom: 0.8rem;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+/* Events Grid & Cards */
+.events-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+}
+
+.event-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+}
+
+.event-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-light);
+}
+
+.event-card-header {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+}
+
+.event-date-badge {
+    background: #eff6ff;
+    border: 2px solid var(--primary-light);
+    border-radius: 12px;
+    padding: 0.5rem 0.75rem;
+    text-align: center;
+    min-width: 65px;
+    flex-shrink: 0;
+}
+
+.event-date-badge .day {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--primary);
+    line-height: 1;
+    display: block;
+}
+
+.event-date-badge .month {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--secondary);
+    text-transform: uppercase;
+    display: block;
+}
+
+.event-title-info h4 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 0.25rem;
+    line-height: 1.3;
+}
+
+.event-meta {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+}
+
+.event-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.event-meta i {
+    color: var(--secondary);
+    width: 14px;
+}
+
+.event-category-tag {
+    display: inline-block;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+}
+
+.event-description {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+}
+
+.event-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+}
+
+.event-status-pill {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.6rem;
+    border-radius: 12px;
+}
+
+.event-status-pill.upcoming {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.event-status-pill.today {
+    background: #fef9c3;
+    color: #a16207;
+}
+
+.event-status-pill.past {
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+@media (max-width: 480px) {
+    .timer-box {
+        min-width: 52px;
+        padding: 0.5rem 0.3rem;
+    }
+
+    .timer-number {
+        font-size: 1.4rem;
+    }
+
+    .timer-dots {
+        font-size: 1.2rem;
+    }
+
+    .countdown-card {
+        padding: 1.25rem;
+    }
 }

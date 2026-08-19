@@ -12,11 +12,21 @@ const DataManager = {
         this.db = dbInstance;
         console.log("DataManager: Conectado a base de datos en la nube con caché ultrarrápida.");
         
-        // Sanitizar cualquier caché antigua de rankings que contenga registros de prueba
+        // Asegurar estructura base de rankings (sin datos ficticios)
         try {
             let parsed = JSON.parse(localStorage.getItem('correcaminos_rankings') || '{}');
-            parsed.clubRecords = [];
-            parsed.provincialMinMarks = [];
+            if (Array.isArray(parsed.clubRecords)) {
+                // Eliminar registros de prueba ficticios si hubieran quedado en caché
+                parsed.clubRecords = parsed.clubRecords.filter(r => 
+                    r.athlete && 
+                    r.athlete !== 'Mateo Fernández' && 
+                    r.athlete !== 'Joaquín Gómez' && 
+                    r.athlete !== 'Morena Suarez'
+                );
+            } else {
+                parsed.clubRecords = [];
+            }
+            parsed.provincialMinMarks = parsed.provincialMinMarks || [];
             if (!parsed.clubExternalLink || parsed.clubExternalLink === '') {
                 parsed.clubExternalLink = 'https://drive.google.com/drive/folders/1yegFAOiYFnqurkxIgUmPIcqa7CQTqb_K';
             }

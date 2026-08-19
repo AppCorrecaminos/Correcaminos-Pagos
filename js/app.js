@@ -3237,6 +3237,378 @@ async function renderSportsHub() {
     });
 }
 
+/**
+ * ==========================================================================
+ * Motor de Atletismo y Navegación de Rankings por Banners
+ * ==========================================================================
+ */
+
+const RankingFlowState = {
+    gender: null,       // 'M' | 'F'
+    category: null,     // 'U12', 'U14', 'U16', 'U18', 'U20', 'Mayores', 'Infantil'
+    discipline: null    // 'Lanzamiento de Jabalina', '80 mts', etc.
+};
+
+function resetRankingFlow(toLevel = 'root') {
+    if (toLevel === 'root') {
+        RankingFlowState.gender = null;
+        RankingFlowState.category = null;
+        RankingFlowState.discipline = null;
+    } else if (toLevel === 'gender') {
+        RankingFlowState.category = null;
+        RankingFlowState.discipline = null;
+    } else if (toLevel === 'category') {
+        RankingFlowState.discipline = null;
+    }
+    renderRankingFlow();
+}
+
+function isFieldEvent(discipline) {
+    if (!discipline) return false;
+    const d = discipline.toLowerCase();
+    return d.includes('salto') || d.includes('lanzamiento') || d.includes('bala') || d.includes('jabalina') || d.includes('disco') || d.includes('martillo') || d.includes('garrocha');
+}
+
+function parseAthleteMark(mark) {
+    if (mark === null || mark === undefined || mark === '') return 0;
+    let str = mark.toString().replace(',', '.').replace(/seg|segundos|m|mts|metros/gi, '').trim();
+
+    const parts = str.split(':');
+    if (parts.length === 3) {
+        return (parseFloat(parts[0]) * 3600) + (parseFloat(parts[1]) * 60) + (parseFloat(parts[2]) || 0);
+    } else if (parts.length === 2) {
+        return (parseFloat(parts[0]) * 60) + (parseFloat(parts[1]) || 0);
+    }
+
+    const dotParts = str.split('.');
+    if (dotParts.length === 3) {
+        return (parseFloat(dotParts[0]) * 60) + parseFloat(dotParts[1]) + (parseFloat(dotParts[2]) / 100);
+    }
+
+    return parseFloat(str) || 0;
+}
+
+function formatAthleteMark(rawMark, numericVal, isField) {
+    if (!rawMark) return '-';
+    if (isField) {
+        if (numericVal > 0) return `${numericVal.toFixed(2)} m`;
+        return rawMark;
+    }
+    if (numericVal > 0) {
+        if (numericVal < 60) {
+            return `${numericVal.toFixed(2)} seg`;
+        }
+        const mins = Math.floor(numericVal / 60);
+        const secs = (numericVal % 60).toFixed(2);
+        return `${mins}:${secs.padStart(5, '0')} min`;
+    }
+    return rawMark;
+}
+
+async function renderRankingFlow() {
+    const container = document.getElementById('ranking-flow-container');
+    const breadcrumbs = document.getElementById('ranking-breadcrumbs');
+    if (!container || !breadcrumbs) return;
+
+    const rankings = await window.DataManager.getRankingsData();
+    const records = rankings.clubRecords || [];
+
+    const genderLabel = RankingFlowState.gender === 'M' ? 'Rama Masculina' : (RankingFlowState.gender === 'F' ? 'Rama Femenina' : '');
+
+    // 1. BREADCRUMBS DINÁMICOS
+    let bcHtml = `<span class="${!RankingFlowState.gender ? 'ranking-breadcrumb-current' : 'ranking-breadcrumb-link'}" onclick="window.resetRankingFlow('root')"><i class="fas fa-trophy" style="color:#f59e0b;"></i> Ranking</span>`;
+
+    if (RankingFlowState.gender) {
+        bcHtml += ` <span class="ranking-breadcrumb-separator"><i class="fas fa-chevron-right"></i></span> `;
+        bcHtml += `<span class="${!RankingFlowState.category ? 'ranking-breadcrumb-current' : 'ranking-breadcrumb-link'}" onclick="window.resetRankingFlow('gender')">${genderLabel}</span>`;
+    }
+    if (RankingFlowState.category) {
+        bcHtml += ` <span class="ranking-breadcrumb-separator"><i class="fas fa-chevron-right"></i></span> `;
+        bcHtml += `<span class="${!RankingFlowState.discipline ? 'ranking-breadcrumb-current' : 'ranking-breadcrumb-link'}" onclick="window.resetRankingFlow('category')">Cat. ${RankingFlowState.category}</span>`;
+    }
+    if (RankingFlowState.discipline) {
+        bcHtml += ` <span class="ranking-breadcrumb-separator"><i class="fas fa-chevron-right"></i></span> `;
+        bcHtml += `<span class="ranking-breadcrumb-current">${RankingFlowState.discipline}</span>`;
+    }
+    breadcrumbs.innerHTML = bcHtml;
+
+    // 2. NIVEL 1: SELECCIÓN DE GÉNERO / RAMA
+    if (!RankingFlowState.gender) {
+        const countMasc = records.filter(r => r.gender === 'M').length;
+        const countFem = records.filter(r => r.gender === 'F').length;
+
+        container.innerHTML = `
+            <div style="margin-bottom: 1rem;">
+                <h4 style="font-size: 1rem; color: var(--primary); margin: 0 0 0.25rem 0;">Selecciona la Rama:</h4>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Elige la rama deportiva para explorar las categorías y pruebas oficiales</p>
+            </div>
+            <div class="ranking-grid-banners">
+                <div class="ranking-card-banner" onclick="window.selectRankingGender('M')">
+                    <div class="ranking-card-banner-content">
+                        <div class="ranking-card-banner-icon masc">
+                            <i class="fas fa-male"></i>
+                        </div>
+                        <div class="ranking-card-banner-info">
+                            <h4>Rama Masculina</h4>
+                            <p>${countMasc} ${countMasc === 1 ? 'marca registrada' : 'marcas registradas'}</p>
+                        </div>
+                    </div>
+                    <div class="ranking-card-banner-arrow"><i class="fas fa-chevron-right"></i></div>
+                </div>
+
+                <div class="ranking-card-banner" onclick="window.selectRankingGender('F')">
+                    <div class="ranking-card-banner-content">
+                        <div class="ranking-card-banner-icon fem">
+                            <i class="fas fa-female"></i>
+                        </div>
+                        <div class="ranking-card-banner-info">
+                            <h4>Rama Femenina</h4>
+                            <p>${countFem} ${countFem === 1 ? 'marca registrada' : 'marcas registradas'}</p>
+                        </div>
+                    </div>
+                    <div class="ranking-card-banner-arrow"><i class="fas fa-chevron-right"></i></div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    // 3. NIVEL 2: SELECCIÓN DE CATEGORÍA
+    if (RankingFlowState.gender && !RankingFlowState.category) {
+        const standardCategories = ['Infantil', 'U12', 'U14', 'U16', 'U18', 'U20', 'Mayores'];
+        const genderRecords = records.filter(r => r.gender === RankingFlowState.gender);
+
+        const catMap = {};
+        standardCategories.forEach(cat => { catMap[cat] = 0; });
+        genderRecords.forEach(r => {
+            const c = r.category || 'Mayores';
+            catMap[c] = (catMap[c] || 0) + 1;
+        });
+
+        const allCats = [...new Set([...standardCategories, ...genderRecords.map(r => r.category).filter(Boolean)])];
+
+        let cardsHtml = '';
+        allCats.forEach(cat => {
+            const count = catMap[cat] || 0;
+            cardsHtml += `
+                <div class="ranking-card-banner" onclick="window.selectRankingCategory('${cat}')">
+                    <div class="ranking-card-banner-content">
+                        <div class="ranking-card-banner-icon cat">
+                            <i class="fas fa-running"></i>
+                        </div>
+                        <div class="ranking-card-banner-info">
+                            <h4>Categoría ${cat}</h4>
+                            <p>${count > 0 ? `${count} ${count === 1 ? 'marca oficial' : 'marcas oficiales'}` : 'Sin marcas cargadas aún'}</p>
+                        </div>
+                    </div>
+                    <div class="ranking-card-banner-arrow"><i class="fas fa-chevron-right"></i></div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = `
+            <button type="button" class="btn-back-rank" onclick="window.resetRankingFlow('root')">
+                <i class="fas fa-arrow-left"></i> Volver a Ramas
+            </button>
+            <div style="margin-bottom: 1rem;">
+                <h4 style="font-size: 1rem; color: var(--primary); margin: 0 0 0.25rem 0;">Categorías - ${genderLabel}</h4>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Selecciona una categoría para ver las pruebas con marcas registradas</p>
+            </div>
+            <div class="ranking-grid-banners">
+                ${cardsHtml}
+            </div>
+        `;
+        return;
+    }
+
+    // 4. NIVEL 3: SELECCIÓN DE PRUEBA / DISCIPLINA (Solo donde hay marcas registradas)
+    if (RankingFlowState.gender && RankingFlowState.category && !RankingFlowState.discipline) {
+        const catRecords = records.filter(r => 
+            r.gender === RankingFlowState.gender && 
+            r.category === RankingFlowState.category
+        );
+
+        if (catRecords.length === 0) {
+            container.innerHTML = `
+                <button type="button" class="btn-back-rank" onclick="window.resetRankingFlow('gender')">
+                    <i class="fas fa-arrow-left"></i> Volver a Categorías
+                </button>
+                <div class="rank-empty-state">
+                    <div style="width:52px; height:52px; border-radius:50%; background:#f1f5f9; color:#94a3b8; display:flex; align-items:center; justify-content:center; font-size:1.5rem; margin:0 auto 0.75rem auto;">
+                        <i class="fas fa-stopwatch"></i>
+                    </div>
+                    <h4 style="color:var(--primary); margin-bottom:0.35rem;">No hay marcas registradas aún</h4>
+                    <p style="font-size:0.85rem; margin:0;">Todavía no se han cargado marcas oficiales para la categoría <strong>${RankingFlowState.category}</strong> (${genderLabel}).</p>
+                </div>
+            `;
+            return;
+        }
+
+        const discMap = {};
+        catRecords.forEach(r => {
+            const disc = r.discipline || 'General';
+            discMap[disc] = (discMap[disc] || 0) + 1;
+        });
+
+        const sortedDiscs = Object.keys(discMap).sort((a, b) => a.localeCompare(b));
+
+        let discCardsHtml = '';
+        sortedDiscs.forEach(disc => {
+            const count = discMap[disc];
+            const isField = isFieldEvent(disc);
+            const iconClass = isField ? 'fa-bullseye' : 'fa-stopwatch';
+
+            discCardsHtml += `
+                <div class="ranking-card-banner" onclick="window.selectRankingDiscipline('${disc.replace(/'/g, "\\'")}')">
+                    <div class="ranking-card-banner-content">
+                        <div class="ranking-card-banner-icon event">
+                            <i class="fas ${iconClass}"></i>
+                        </div>
+                        <div class="ranking-card-banner-info">
+                            <h4>${disc}</h4>
+                            <p>${count} ${count === 1 ? 'atleta / marca' : 'atletas / marcas'}</p>
+                        </div>
+                    </div>
+                    <div class="ranking-card-banner-arrow"><i class="fas fa-chevron-right"></i></div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = `
+            <button type="button" class="btn-back-rank" onclick="window.resetRankingFlow('gender')">
+                <i class="fas fa-arrow-left"></i> Volver a Categorías
+            </button>
+            <div style="margin-bottom: 1rem;">
+                <h4 style="font-size: 1rem; color: var(--primary); margin: 0 0 0.25rem 0;">Pruebas con Marcas Oficiales: Cat. ${RankingFlowState.category} (${genderLabel})</h4>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Selecciona una prueba para consultar las mejores marcas y posiciones</p>
+            </div>
+            <div class="ranking-grid-banners">
+                ${discCardsHtml}
+            </div>
+        `;
+        return;
+    }
+
+    // 5. NIVEL 4: TABLA OFICIAL DE ATLETAS Y SUS MEJORES MARCAS
+    if (RankingFlowState.gender && RankingFlowState.category && RankingFlowState.discipline) {
+        const discRecords = records.filter(r => 
+            r.gender === RankingFlowState.gender && 
+            r.category === RankingFlowState.category && 
+            r.discipline === RankingFlowState.discipline
+        );
+
+        const isField = isFieldEvent(RankingFlowState.discipline);
+
+        // Agrupar por atleta para obtener su Mejor Marca Personal (PB)
+        const bestsMap = {};
+        discRecords.forEach(r => {
+            const key = (r.athlete || '').toLowerCase().trim();
+            const num = parseAthleteMark(r.mark);
+
+            if (!bestsMap[key]) {
+                bestsMap[key] = { ...r, numericMark: num, isField };
+            } else {
+                const currentBestNum = bestsMap[key].numericMark;
+                const isBetter = isField ? (num > currentBestNum) : (num < currentBestNum);
+                if (isBetter && num > 0) {
+                    bestsMap[key] = { ...r, numericMark: num, isField };
+                }
+            }
+        });
+
+        const rankingArray = Object.values(bestsMap).sort((a, b) => {
+            if (isField) {
+                return b.numericMark - a.numericMark; // Mayor distancia primero
+            }
+            return a.numericMark - b.numericMark; // Menor tiempo primero
+        });
+
+        let rowsHtml = '';
+        rankingArray.forEach((r, idx) => {
+            let posBadge = '';
+            if (idx === 0) posBadge = `<span class="podium-badge podium-1" title="1º Puesto - Oro">🥇</span>`;
+            else if (idx === 1) posBadge = `<span class="podium-badge podium-2" title="2º Puesto - Plata">🥈</span>`;
+            else if (idx === 2) posBadge = `<span class="podium-badge podium-3" title="3º Puesto - Bronce">🥉</span>`;
+            else posBadge = `<span class="podium-badge podium-other">${idx + 1}º</span>`;
+
+            const formattedMark = formatAthleteMark(r.mark, r.numericMark, isField);
+
+            rowsHtml += `
+                <tr>
+                    <td style="text-align: center; vertical-align: middle;">${posBadge}</td>
+                    <td>
+                        <strong style="color: var(--primary); font-size: 0.95rem; display: block;">${r.athlete}</strong>
+                        <small style="color: #64748b;">${r.category} • ${genderLabel}</small>
+                    </td>
+                    <td style="text-align: right;">
+                        <span class="rank-mark-value">${formattedMark}</span>
+                    </td>
+                    <td>
+                        <span style="color: #334155; font-size: 0.85rem; font-weight: 500;">${r.tournament || 'Torneo Oficial'}</span>
+                    </td>
+                    <td style="text-align: center; color: #64748b; font-size: 0.85rem;">
+                        ${r.date || '---'}
+                    </td>
+                </tr>
+            `;
+        });
+
+        container.innerHTML = `
+            <button type="button" class="btn-back-rank" onclick="window.resetRankingFlow('category')">
+                <i class="fas fa-arrow-left"></i> Volver a Pruebas
+            </button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                <div>
+                    <h4 style="font-size: 1.1rem; color: var(--primary); margin: 0 0 0.2rem 0;">
+                        ${RankingFlowState.discipline}
+                    </h4>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">
+                        Categoría ${RankingFlowState.category} • ${genderLabel} • ${rankingArray.length} ${rankingArray.length === 1 ? 'atleta clasificado' : 'atletas clasificados'}
+                    </p>
+                </div>
+                <span class="badge" style="background: #e0e7ff; color: #3730a3; font-weight: 700; font-size: 0.8rem;">
+                    ${isField ? '📏 Prueba de Campo (Metros)' : '⏱️ Prueba de Pista (Tiempo)'}
+                </span>
+            </div>
+
+            <div class="table-responsive" style="max-height: 380px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px;">
+                <table class="ranking-table">
+                    <thead style="background: #1a365d; color: white; position: sticky; top: 0; z-index: 2;">
+                        <tr>
+                            <th style="padding: 0.65rem 0.5rem; text-align: center; width: 55px;">Pos</th>
+                            <th style="padding: 0.65rem 0.75rem; text-align: left;">Atleta</th>
+                            <th style="padding: 0.65rem 0.75rem; text-align: right;">Mejor Marca Personal</th>
+                            <th style="padding: 0.65rem 0.75rem; text-align: left;">Torneo / Sede</th>
+                            <th style="padding: 0.65rem 0.5rem; text-align: center; width: 100px;">Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+}
+
+// Funciones globales expuestas para los onclick de los banners
+window.resetRankingFlow = resetRankingFlow;
+window.selectRankingGender = function(gender) {
+    RankingFlowState.gender = gender;
+    RankingFlowState.category = null;
+    RankingFlowState.discipline = null;
+    renderRankingFlow();
+};
+window.selectRankingCategory = function(cat) {
+    RankingFlowState.category = cat;
+    RankingFlowState.discipline = null;
+    renderRankingFlow();
+};
+window.selectRankingDiscipline = function(disc) {
+    RankingFlowState.discipline = disc;
+    renderRankingFlow();
+};
+
 function setupSportsHubListeners() {
     // Botón para abrir pestaña del calendario
     document.getElementById('btn-hub-see-all-events')?.addEventListener('click', () => {
@@ -3244,23 +3616,19 @@ function setupSportsHubListeners() {
         if (calNav) calNav.click();
     });
 
-    // Abrir Modal Ranking Correcaminos
+    // Abrir Modal Interactivo Ranking Correcaminos (Navegación por Banners)
     document.getElementById('btn-open-ranking-club')?.addEventListener('click', async () => {
         const rankings = await window.DataManager.getRankingsData();
         const driveLinkBtn = document.getElementById('link-open-club-drive');
-        const noLinkMsg = document.getElementById('club-rank-no-link-msg');
 
         if (rankings.clubExternalLink && rankings.clubExternalLink.trim() !== '') {
             if (driveLinkBtn) {
                 driveLinkBtn.href = rankings.clubExternalLink.trim();
                 driveLinkBtn.style.display = 'inline-flex';
             }
-            if (noLinkMsg) noLinkMsg.style.display = 'none';
-        } else {
-            if (driveLinkBtn) driveLinkBtn.style.display = 'none';
-            if (noLinkMsg) noLinkMsg.style.display = 'block';
         }
 
+        resetRankingFlow('root');
         document.getElementById('modal-ranking-club')?.classList.add('active');
     });
 
@@ -3287,7 +3655,6 @@ function setupSportsHubListeners() {
     // Formulario de Configuración de Rankings (Admin)
     const configRankForm = document.getElementById('config-rankings-form');
     if (configRankForm) {
-        // Cargar valores iniciales en los inputs del formulario
         window.DataManager.getRankingsData().then(rankings => {
             const clubLinkInput = document.getElementById('cfg-rank-club-link');
             const clubUpdatedInput = document.getElementById('cfg-rank-club-updated');
@@ -3304,7 +3671,7 @@ function setupSportsHubListeners() {
             e.preventDefault();
             const current = await window.DataManager.getRankingsData();
             current.clubExternalLink = document.getElementById('cfg-rank-club-link')?.value.trim() || '';
-            current.clubUpdated = document.getElementById('cfg-rank-club-updated')?.value.trim() || 'Agosto 2026';
+            current.clubUpdated = document.getElementById('cfg-rank-club-updated')?.value.trim() || 'Temporada Oficial';
             current.provincialExternalLink = document.getElementById('cfg-rank-prov-link')?.value.trim() || '';
             current.provincialUpdated = document.getElementById('cfg-rank-prov-updated')?.value.trim() || 'Temporada Oficial 2026';
 
@@ -3316,27 +3683,153 @@ function setupSportsHubListeners() {
 
     // Modal Admin: Administrar Marcas del Club
     document.getElementById('btn-admin-manage-club-records')?.addEventListener('click', async () => {
+        const dateInput = document.getElementById('add-rec-date');
+        if (dateInput && !dateInput.value) {
+            dateInput.valueAsDate = new Date();
+        }
         await renderAdminClubRecordsTable();
         document.getElementById('modal-manage-club-records')?.classList.add('active');
+    });
+
+    // Migración: Trigger selector de archivo
+    document.getElementById('btn-trigger-import-ranking')?.addEventListener('click', () => {
+        document.getElementById('input-import-ranking-file')?.click();
+    });
+
+    // Migración: Procesador del archivo JSON de marcas
+    document.getElementById('input-import-ranking-file')?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const parsed = JSON.parse(event.target.result);
+                let importedRecords = [];
+
+                // Caso 1: Array plano de registros exportados
+                if (Array.isArray(parsed)) {
+                    importedRecords = parsed.map(r => ({
+                        athlete: (r.athlete || r.Atleta || '').trim(),
+                        category: (r.category || r.Categoria || 'Mayores').trim(),
+                        gender: (r.gender || r.Sexo || 'M').trim().toUpperCase(),
+                        discipline: (r.discipline || r.event || r.Prueba || '').trim(),
+                        mark: (r.mark || r.value || '').toString().trim(),
+                        tournament: (r.tournament || r.Torneo || 'Torneo Oficial').trim(),
+                        date: (r.date || r.Fecha || new Date().toISOString().split('T')[0]).trim(),
+                        weight: (r.weight || '').trim()
+                    })).filter(r => r.athlete && r.discipline && r.mark);
+                }
+                // Caso 2: Objeto completo de Ranking Correcaminos ({ athletes, results, events })
+                else if (parsed.athletes && parsed.results && parsed.events) {
+                    importedRecords = parsed.results.map(r => {
+                        const ath = parsed.athletes.find(a => a.id === r.athleteId) || {};
+                        const ev = parsed.events.find(e => e.id === r.eventId) || {};
+                        return {
+                            athlete: (ath.Atleta || ath.name || 'Atleta').trim(),
+                            category: (ath.Categoria || ath.category || 'Mayores').trim(),
+                            gender: (ath.Sexo || ath.gender || 'M').trim().toUpperCase(),
+                            discipline: (ev.name || ev.discipline || 'Prueba General').trim(),
+                            mark: (r.value !== undefined ? r.value.toString() : (r.mark || '')).trim(),
+                            tournament: (r.tournament || 'Torneo Oficial').trim(),
+                            date: (r.date || new Date().toISOString().split('T')[0]).trim(),
+                            weight: (r.weight || '').trim()
+                        };
+                    }).filter(r => r.athlete && r.discipline && r.mark);
+                }
+                // Caso 3: Objeto con propiedad clubRecords
+                else if (Array.isArray(parsed.clubRecords)) {
+                    importedRecords = parsed.clubRecords.filter(r => r.athlete && r.discipline && r.mark);
+                }
+
+                if (importedRecords.length === 0) {
+                    alert('No se encontraron marcas válidas en el archivo seleccionado.');
+                    return;
+                }
+
+                const current = await window.DataManager.getRankingsData();
+                if (!current.clubRecords) current.clubRecords = [];
+
+                const doReplace = confirm(`Se detectaron ${importedRecords.length} marcas oficiales en el archivo.\n\n¿Deseas REEMPLAZAR todas las marcas actuales (Aceptar) o FUSIONAR con las existentes (Cancelar)?`);
+
+                if (doReplace) {
+                    current.clubRecords = importedRecords;
+                } else {
+                    importedRecords.forEach(imp => {
+                        const exists = current.clubRecords.some(r => 
+                            r.athlete.toLowerCase() === imp.athlete.toLowerCase() &&
+                            r.discipline.toLowerCase() === imp.discipline.toLowerCase() &&
+                            r.mark === imp.mark &&
+                            r.date === imp.date
+                        );
+                        if (!exists) {
+                            current.clubRecords.push(imp);
+                        }
+                    });
+                }
+
+                await window.DataManager.saveRankingsData(current);
+                toast(`¡Migración exitosa! Base de datos actualizada con ${current.clubRecords.length} marcas.`);
+                e.target.value = '';
+
+                await renderAdminClubRecordsTable();
+                renderSportsHub();
+                renderRankingFlow();
+
+            } catch (err) {
+                console.error('Error al importar archivo de ranking:', err);
+                alert('Error al procesar el archivo JSON: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    });
+
+    // Migración: Exportar copia de respaldo desde App Correcaminos
+    document.getElementById('btn-export-club-records')?.addEventListener('click', async () => {
+        const rankings = await window.DataManager.getRankingsData();
+        const records = rankings.clubRecords || [];
+
+        if (records.length === 0) {
+            alert('No hay marcas oficiales registradas para exportar.');
+            return;
+        }
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(records, null, 2));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        const date = new Date().toISOString().split('T')[0];
+        dlAnchorElem.setAttribute("download", `Correcaminos_App_Marcas_${date}.json`);
+        dlAnchorElem.click();
+    });
+
+    // Filtro rápido en tabla admin
+    document.getElementById('admin-rec-search')?.addEventListener('input', () => {
+        renderAdminClubRecordsTable();
     });
 
     document.getElementById('form-add-club-record')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const category = document.getElementById('add-rec-category').value.trim();
         const discipline = document.getElementById('add-rec-discipline').value.trim();
+        const gender = document.getElementById('add-rec-gender')?.value || 'M';
         const athlete = document.getElementById('add-rec-athlete').value.trim();
         const mark = document.getElementById('add-rec-mark').value.trim();
+        const date = document.getElementById('add-rec-date')?.value || new Date().toISOString().split('T')[0];
         const tournament = document.getElementById('add-rec-tournament').value.trim();
 
         const current = await window.DataManager.getRankingsData();
         if (!current.clubRecords) current.clubRecords = [];
-        current.clubRecords.push({ category, discipline, athlete, mark, tournament });
+        current.clubRecords.push({ category, discipline, gender, athlete, mark, date, tournament });
 
         await window.DataManager.saveRankingsData(current);
-        toast('Marca añadida con éxito');
+        toast('Marca oficial añadida con éxito');
         e.target.reset();
+        const dateInput = document.getElementById('add-rec-date');
+        if (dateInput) dateInput.valueAsDate = new Date();
+
         await renderAdminClubRecordsTable();
         renderSportsHub();
+        renderRankingFlow();
     });
 
     // Modal Admin: Administrar Marcas Mínimas Provinciales
@@ -3366,26 +3859,46 @@ function setupSportsHubListeners() {
 
 async function renderAdminClubRecordsTable() {
     const tbody = document.querySelector('#table-admin-manage-club tbody');
+    const countEl = document.getElementById('admin-club-records-count');
+    const searchVal = document.getElementById('admin-rec-search')?.value.toLowerCase().trim() || '';
     if (!tbody) return;
+
     const rankings = await window.DataManager.getRankingsData();
     const records = rankings.clubRecords || [];
+    if (countEl) countEl.innerText = records.length;
     tbody.innerHTML = '';
 
     if (records.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" align="center" style="padding: 1rem; color: var(--text-muted);">No hay marcas cargadas.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" align="center" style="padding: 1.5rem; color: var(--text-muted);">No hay marcas cargadas aún. Usa el formulario de arriba para cargar registros oficiales.</td></tr>`;
         return;
     }
 
-    records.forEach((r, idx) => {
+    const filtered = records.filter(r => {
+        if (!searchVal) return true;
+        return (r.athlete && r.athlete.toLowerCase().includes(searchVal)) ||
+               (r.discipline && r.discipline.toLowerCase().includes(searchVal)) ||
+               (r.category && r.category.toLowerCase().includes(searchVal)) ||
+               (r.tournament && r.tournament.toLowerCase().includes(searchVal));
+    });
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" align="center" style="padding: 1rem; color: var(--text-muted);">No coinciden registros con la búsqueda.</td></tr>`;
+        return;
+    }
+
+    filtered.forEach((r, idx) => {
+        const originalIndex = records.indexOf(r);
+        const genderLabel = r.gender === 'M' ? 'Masc' : (r.gender === 'F' ? 'Fem' : '');
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td><b>${r.category}</b></td>
-            <td>${r.discipline}</td>
-            <td>${r.athlete}</td>
+            <td><b>${r.athlete}</b></td>
+            <td><span style="color:#0f766e; font-weight:600;">${r.discipline}</span></td>
+            <td><span class="rank-cat-badge">${r.category || '---'} ${genderLabel ? `(${genderLabel})` : ''}</span></td>
             <td><b style="color:#f59e0b;">${r.mark}</b></td>
-            <td>${r.tournament || '---'}</td>
+            <td><small>${r.tournament || '---'}</small></td>
+            <td><small>${r.date || '---'}</small></td>
             <td>
-                <button type="button" class="btn-action reject btn-del-club-record" data-index="${idx}" title="Eliminar fila" style="color:var(--danger);">
+                <button type="button" class="btn-action reject btn-del-club-record" data-index="${originalIndex}" title="Eliminar marca" style="color:var(--danger);">
                     <i class="fas fa-trash"></i>
                 </button>
             </td>
@@ -3400,9 +3913,10 @@ async function renderAdminClubRecordsTable() {
             if (current.clubRecords) {
                 current.clubRecords.splice(idx, 1);
                 await window.DataManager.saveRankingsData(current);
-                toast('Fila eliminada');
+                toast('Registro eliminado');
                 await renderAdminClubRecordsTable();
                 renderSportsHub();
+                renderRankingFlow();
             }
         });
     });
@@ -3450,3 +3964,4 @@ async function renderAdminProvMarksTable() {
         });
     });
 }
+

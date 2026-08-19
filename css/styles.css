@@ -1654,4 +1654,203 @@ select {
     .countdown-card {
         padding: 1.25rem;
     }
+}
+
+/* ==========================================================================
+   Sports Hub & Ranking Banners (FDPA Style)
+   ========================================================================== */
+
+.sports-hub-section {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.hub-events-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.hub-event-item {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 1.1rem;
+    color: white;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    transition: all 0.25s ease;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+}
+
+.hub-event-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.25);
+    border-color: #f59e0b;
+}
+
+.hub-event-date-box {
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    color: white;
+    border-radius: 10px;
+    padding: 0.5rem 0.6rem;
+    text-align: center;
+    min-width: 58px;
+    flex-shrink: 0;
+    box-shadow: 0 3px 10px rgba(249, 115, 22, 0.35);
+}
+
+.hub-event-date-box .hub-day {
+    font-size: 1.4rem;
+    font-weight: 800;
+    line-height: 1;
+    display: block;
+}
+
+.hub-event-date-box .hub-month {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    display: block;
+    margin-top: 2px;
+}
+
+.hub-event-date-box .hub-year {
+    font-size: 0.6rem;
+    opacity: 0.85;
+    display: block;
+}
+
+.hub-event-info {
+    flex: 1;
+    overflow: hidden;
+}
+
+.hub-event-info h5 {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0 0 0.25rem 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hub-event-info p {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Ranking Banners */
+.hub-ranking-banners {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.hub-banner-card {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 1.15rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: white;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.15);
+}
+
+.hub-banner-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 150px;
+    background: radial-gradient(circle, rgba(245, 158, 11, 0.1) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
+}
+
+.hub-banner-card:hover {
+    transform: translateY(-2px) scale(1.005);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+    border-color: rgba(245, 158, 11, 0.5);
+}
+
+.hub-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.hub-banner-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.hub-banner-icon.club {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.hub-banner-icon.provincial {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.hub-banner-info h4 {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0 0 0.2rem 0;
+}
+
+.hub-banner-info p {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    margin: 0 0 0.35rem 0;
+}
+
+.hub-banner-date {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.hub-banner-arrow {
+    color: #64748b;
+    font-size: 1.1rem;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.hub-banner-card:hover .hub-banner-arrow {
+    color: #ffffff;
+    transform: translateX(4px);
 }

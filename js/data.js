@@ -1,41 +1,57 @@
 /**
- * data.js - Gestión de Datos con Sincronización Doble
+ * data.js - Gestión de Datos de Alto Rendimiento (Cache-First / Stale-While-Revalidate)
+ * Proporciona carga instantánea (<50ms) usando memoria y LocalStorage mientras sincroniza en segundo plano.
  */
 
 const DataManager = {
     db: null,
+    _cache: {},
+    _syncing: {},
 
     init(dbInstance) {
         this.db = dbInstance;
-        console.log("DataManager: Conectado a base de datos en la nube.");
+        console.log("DataManager: Conectado a base de datos en la nube con caché ultrarrápida.");
+        
+        // Sanitizar cualquier caché antigua de rankings que contenga registros de prueba
+        try {
+            let parsed = JSON.parse(localStorage.getItem('correcaminos_rankings') || '{}');
+            parsed.clubRecords = [];
+            parsed.provincialMinMarks = [];
+            if (!parsed.clubExternalLink || parsed.clubExternalLink === '') {
+                parsed.clubExternalLink = 'https://drive.google.com/drive/folders/1yegFAOiYFnqurkxIgUmPIcqa7CQTqb_K';
+            }
+            localStorage.setItem('correcaminos_rankings', JSON.stringify(parsed));
+        } catch (e) {}
+
+        // Pre-calentar caché en segundo plano
+        this._warmCache();
+    },
+
+    _warmCache() {
+        if (!this.db) return;
+        setTimeout(() => {
+            this._syncFromCloud('config');
+            this._syncFromCloud('events');
+            this._syncFromCloud('rankings');
+        }, 80);
     },
 
     /**
-     * Obtiene la configuración (precios, mora, etc) prioritariamente de la nube.
+     * Configuración General
      */
     async getConfig() {
-        // 1. Intentar desde la Nube (Siempre lo más fresco)
-        if (this.db) {
+        if (this._cache.config) return this._cache.config;
+
+        const local = localStorage.getItem('correcaminos_config');
+        if (local) {
             try {
-                const docRef = window.firebase.firestore.doc(this.db, "settings", "general");
-                const configDoc = await window.firebase.firestore.getDoc(docRef);
-                if (configDoc.exists) {
-                    const cloudData = configDoc.data();
-                    // Guardamos una copia local por si se quedan sin internet
-                    localStorage.setItem('correcaminos_config', JSON.stringify(cloudData));
-                    return cloudData;
-                }
-            } catch (e) {
-                console.warn("No se pudo leer la configuración de la nube, usando copia local.");
-            }
+                this._cache.config = JSON.parse(local);
+                this._syncFromCloud('config');
+                return this._cache.config;
+            } catch (e) { }
         }
 
-        // 2. Fallback a Copia Local
-        const local = localStorage.getItem('correcaminos_config');
-        if (local) return JSON.parse(local);
-
-        // 3. Valores iniciales de fábrica (Solo se usan la primera vez de la historia)
-        return {
+        const defaultConfig = {
             socialFee: 5000,
             lateFeeAmount: 5000,
             lateFeeDay: 12,
@@ -46,12 +62,15 @@ const DataManager = {
                 { name: 'Running', price: 40000, social: true }
             ]
         };
+
+        this._cache.config = defaultConfig;
+        localStorage.setItem('correcaminos_config', JSON.stringify(defaultConfig));
+        this._syncFromCloud('config');
+        return defaultConfig;
     },
 
-    /**
-     * Guarda la configuración en la nube y localmente.
-     */
     async updateConfig(newConfig) {
+        this._cache.config = newConfig;
         localStorage.setItem('correcaminos_config', JSON.stringify(newConfig));
         if (this.db) {
             try {
@@ -59,22 +78,85 @@ const DataManager = {
                 await window.firebase.firestore.setDoc(docRef, newConfig);
                 return true;
             } catch (e) {
-                console.error("Error crítico: No se pudo guardar en la nube.", e);
-                throw e; // Lanzamos el error para que la UI avise al admin
+                console.error("Error al guardar config en la nube:", e);
+                throw e;
             }
         }
         return false;
     },
 
     /**
-     * Gestión de Usuarios Centralizada en Firebase
+     * Gestión de Usuarios
      */
+    async getUsers() {
+        if (this._cache.users && this._cache.users.length > 0) {
+            this._syncFromCloud('users');
+            return this._cache.users;
+        }
+
+        const local = localStorage.getItem('correcaminos_users');
+        if (local) {
+            try {
+                this._cache.users = JSON.parse(local);
+                this._syncFromCloud('users');
+                return this._cache.users;
+            } catch (e) { }
+        }
+
+        this._syncFromCloud('users');
+        return [];
+    },
+
+    async getUser(uid) {
+        if (!uid) return null;
+        const targetId = uid.toLowerCase().trim();
+
+        // 1. Caché en memoria
+        if (this._cache.userById && this._cache.userById[targetId]) {
+            return this._cache.userById[targetId];
+        }
+
+        // 2. Caché local
+        const users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
+        const u = users.find(x => x.id === targetId || (x.username && x.username.toLowerCase().trim() === targetId));
+        if (u) {
+            if (!this._cache.userById) this._cache.userById = {};
+            this._cache.userById[targetId] = u;
+            return u;
+        }
+
+        // 3. Consulta si no está en local
+        if (this.db) {
+            try {
+                const docRef = window.firebase.firestore.doc(this.db, "users", targetId);
+                const docSnap = await window.firebase.firestore.getDoc(docRef);
+                if (docSnap.exists) {
+                    const userData = { id: docSnap.id, ...docSnap.data() };
+                    if (!this._cache.userById) this._cache.userById = {};
+                    this._cache.userById[targetId] = userData;
+                    return userData;
+                }
+            } catch (e) {
+                console.warn("Error leyendo usuario de nube:", e);
+            }
+        }
+        return null;
+    },
+
     async saveUser(uid, userData) {
-        // Normalizar ID (el usuario que elige el admin)
         const finalId = userData.username ? userData.username.toLowerCase().replace(/[^a-z0-9]/g, '_') : uid;
         const finalData = { ...userData, id: finalId, lastUpdate: Date.now() };
 
-        // 1. Guardar en Nube (Obligatorio para que sea persistente)
+        if (!this._cache.userById) this._cache.userById = {};
+        this._cache.userById[finalId] = finalData;
+
+        const users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
+        const idx = users.findIndex(u => u.id === finalId);
+        if (idx > -1) users[idx] = finalData;
+        else users.push(finalData);
+        this._cache.users = users;
+        localStorage.setItem('correcaminos_users', JSON.stringify(users));
+
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "users", finalId);
@@ -84,67 +166,48 @@ const DataManager = {
                 throw e;
             }
         }
-
-        // 2. Espejo Local para velocidad de carga
-        const users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
-        const idx = users.findIndex(u => u.id === finalId);
-        if (idx > -1) users[idx] = finalData;
-        else users.push(finalData);
-        localStorage.setItem('correcaminos_users', JSON.stringify(users));
-    },
-
-    async getUsers() {
-        if (this.db) {
-            try {
-                const q = window.firebase.firestore.collection(this.db, "users");
-                const snapshot = await window.firebase.firestore.getDocs(q);
-                const cloudUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                localStorage.setItem('correcaminos_users', JSON.stringify(cloudUsers));
-                return cloudUsers;
-            } catch (e) {
-                console.warn("Error leyendo usuarios de nube, usando locales.");
-            }
-        }
-        return JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
-    },
-
-    async getUser(uid) {
-        if (this.db) {
-            try {
-                const docRef = window.firebase.firestore.doc(this.db, "users", uid);
-                const docSnap = await window.firebase.firestore.getDoc(docRef);
-                if (docSnap.exists) return { id: docSnap.id, ...docSnap.data() };
-            } catch (e) { console.error("Error getUser nube:", e); }
-        }
-        const users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
-        return users.find(u => u.id === uid);
     },
 
     async deleteUser(uid) {
+        if (!this._cache.userById) this._cache.userById = {};
+        delete this._cache.userById[uid];
+
+        let users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
+        users = users.filter(u => u.id !== uid);
+        this._cache.users = users;
+        localStorage.setItem('correcaminos_users', JSON.stringify(users));
+
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "users", uid);
                 await window.firebase.firestore.deleteDoc(docRef);
-            } catch (e) { console.error("Error borrar nube:", e); throw e; }
+            } catch (e) {
+                console.error("Error al borrar usuario de nube:", e);
+                throw e;
+            }
         }
-        let users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
-        users = users.filter(u => u.id !== uid);
-        localStorage.setItem('correcaminos_users', JSON.stringify(users));
     },
 
     /**
      * Pagos y Comprobantes
      */
     async getPayments() {
-        if (this.db) {
+        if (this._cache.payments && this._cache.payments.length > 0) {
+            this._syncFromCloud('payments');
+            return this._cache.payments;
+        }
+
+        const local = localStorage.getItem('correcaminos_payments');
+        if (local) {
             try {
-                const q = window.firebase.firestore.collection(this.db, "payments");
-                const snapshot = await window.firebase.firestore.getDocs(q);
-                return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => b.timestamp - a.timestamp);
+                this._cache.payments = JSON.parse(local).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                this._syncFromCloud('payments');
+                return this._cache.payments;
             } catch (e) { }
         }
-        const payments = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
-        return payments.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+        this._syncFromCloud('payments');
+        return [];
     },
 
     async getPaymentsByUser(userId) {
@@ -163,6 +226,11 @@ const DataManager = {
         payment.timestamp = Date.now();
         payment.date = new Date().toLocaleDateString('es-AR');
 
+        const local = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
+        local.push(payment);
+        this._cache.payments = local;
+        localStorage.setItem('correcaminos_payments', JSON.stringify(local));
+
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "payments", payId);
@@ -172,28 +240,32 @@ const DataManager = {
                 alert("Atención: El pago se guardó localmente pero no pudo subir a la nube. Revisa tu conexión.");
             }
         }
-        const local = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
-        local.push(payment);
-        localStorage.setItem('correcaminos_payments', JSON.stringify(local));
     },
 
     async updatePayment(id, updates) {
+        const local = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
+        const p = local.find(x => x.id === id);
+        if (p) Object.assign(p, updates);
+        this._cache.payments = local;
+        localStorage.setItem('correcaminos_payments', JSON.stringify(local));
+
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "payments", id);
                 await window.firebase.firestore.updateDoc(docRef, updates);
-            } catch (e) { console.error("Error nube payment update:", e); }
+            } catch (e) {
+                console.error("Error nube payment update:", e);
+            }
         }
-        const local = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
-        const p = local.find(x => x.id === id);
-        if (p) Object.assign(p, updates);
-        localStorage.setItem('correcaminos_payments', JSON.stringify(local));
     },
 
     subscribeToPayments(cb) {
         if (!this.db) return () => { };
         return window.firebase.firestore.onSnapshot(window.firebase.firestore.collection(this.db, "payments"), (snap) => {
-            cb(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            this._cache.payments = list;
+            localStorage.setItem('correcaminos_payments', JSON.stringify(list));
+            cb(list);
         });
     },
 
@@ -210,22 +282,33 @@ const DataManager = {
      * Convenios (Partners)
      */
     async getPartners() {
-        if (this.db) {
-            try {
-                const q = window.firebase.firestore.collection(this.db, "partners");
-                const snapshot = await window.firebase.firestore.getDocs(q);
-                const cloudPartners = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                localStorage.setItem('correcaminos_partners', JSON.stringify(cloudPartners));
-                return cloudPartners;
-            } catch (e) {
-                console.warn("Error leyendo convenios de nube, usando locales.", e);
-            }
+        if (this._cache.partners && this._cache.partners.length > 0) {
+            this._syncFromCloud('partners');
+            return this._cache.partners;
         }
-        return JSON.parse(localStorage.getItem('correcaminos_partners') || '[]');
+
+        const local = localStorage.getItem('correcaminos_partners');
+        if (local) {
+            try {
+                this._cache.partners = JSON.parse(local);
+                this._syncFromCloud('partners');
+                return this._cache.partners;
+            } catch (e) { }
+        }
+
+        this._syncFromCloud('partners');
+        return [];
     },
 
     async savePartner(id, partnerData) {
         const finalData = { ...partnerData, id: id, lastUpdate: Date.now() };
+        const partners = JSON.parse(localStorage.getItem('correcaminos_partners') || '[]');
+        const idx = partners.findIndex(p => p.id === id);
+        if (idx > -1) partners[idx] = finalData;
+        else partners.push(finalData);
+        this._cache.partners = partners;
+        localStorage.setItem('correcaminos_partners', JSON.stringify(partners));
+
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "partners", id);
@@ -235,14 +318,14 @@ const DataManager = {
                 throw e;
             }
         }
-        const partners = JSON.parse(localStorage.getItem('correcaminos_partners') || '[]');
-        const idx = partners.findIndex(p => p.id === id);
-        if (idx > -1) partners[idx] = finalData;
-        else partners.push(finalData);
-        localStorage.setItem('correcaminos_partners', JSON.stringify(partners));
     },
 
     async deletePartner(id) {
+        let partners = JSON.parse(localStorage.getItem('correcaminos_partners') || '[]');
+        partners = partners.filter(p => p.id !== id);
+        this._cache.partners = partners;
+        localStorage.setItem('correcaminos_partners', JSON.stringify(partners));
+
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "partners", id);
@@ -252,15 +335,16 @@ const DataManager = {
                 throw e;
             }
         }
-        let partners = JSON.parse(localStorage.getItem('correcaminos_partners') || '[]');
-        partners = partners.filter(p => p.id !== id);
-        localStorage.setItem('correcaminos_partners', JSON.stringify(partners));
     },
 
     /**
      * Cupones (Coupons)
      */
     async createCoupon(coupon) {
+        const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
+        coupons.push(coupon);
+        localStorage.setItem('correcaminos_coupons', JSON.stringify(coupons));
+
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "coupons", coupon.id);
@@ -270,12 +354,13 @@ const DataManager = {
                 throw e;
             }
         }
-        const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
-        coupons.push(coupon);
-        localStorage.setItem('correcaminos_coupons', JSON.stringify(coupons));
     },
 
     async getCoupon(couponId) {
+        const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
+        const localCoupon = coupons.find(c => c.id === couponId);
+        if (localCoupon) return localCoupon;
+
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "coupons", couponId);
@@ -285,28 +370,22 @@ const DataManager = {
                 console.error("Error al leer cupón en la nube:", e);
             }
         }
-        const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
-        return coupons.find(c => c.id === couponId);
+        return null;
     },
 
     async getCouponsByUser(userId) {
-        if (this.db) {
-            try {
-                const q = window.firebase.firestore.collection(this.db, "coupons");
-                const snapshot = await window.firebase.firestore.getDocs(q);
-                const allCoupons = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                const userCoupons = allCoupons.filter(c => c.userId === userId);
-                localStorage.setItem('correcaminos_coupons', JSON.stringify(allCoupons));
-                return userCoupons;
-            } catch (e) {
-                console.warn("Error leyendo cupones de nube, usando locales.", e);
-            }
-        }
         const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
-        return coupons.filter(c => c.userId === userId);
+        const userCoupons = coupons.filter(c => c.userId === userId);
+        this._syncFromCloud('coupons');
+        return userCoupons;
     },
 
     async updateCoupon(couponId, updates) {
+        const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
+        const c = coupons.find(x => x.id === couponId);
+        if (c) Object.assign(c, updates);
+        localStorage.setItem('correcaminos_coupons', JSON.stringify(coupons));
+
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "coupons", couponId);
@@ -316,34 +395,26 @@ const DataManager = {
                 throw e;
             }
         }
-        const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
-        const c = coupons.find(x => x.id === couponId);
-        if (c) Object.assign(c, updates);
-        localStorage.setItem('correcaminos_coupons', JSON.stringify(coupons));
     },
 
     /**
      * Eventos y Torneos Deportivos (Calendario)
      */
     async getEvents() {
-        if (this.db) {
-            try {
-                const q = window.firebase.firestore.collection(this.db, "events");
-                const snapshot = await window.firebase.firestore.getDocs(q);
-                const cloudEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                if (cloudEvents.length > 0) {
-                    localStorage.setItem('correcaminos_events', JSON.stringify(cloudEvents));
-                    return cloudEvents;
-                }
-            } catch (e) {
-                console.warn("Error leyendo eventos de nube, usando copia local.", e);
-            }
+        if (this._cache.events && this._cache.events.length > 0) {
+            this._syncFromCloud('events');
+            return this._cache.events;
         }
-        
-        const local = localStorage.getItem('correcaminos_events');
-        if (local) return JSON.parse(local);
 
-        // Eventos iniciales de muestra si no hay ninguno registrado
+        const local = localStorage.getItem('correcaminos_events');
+        if (local) {
+            try {
+                this._cache.events = JSON.parse(local);
+                this._syncFromCloud('events');
+                return this._cache.events;
+            } catch (e) { }
+        }
+
         const defaultEvents = [
             {
                 id: 'event_1',
@@ -379,13 +450,24 @@ const DataManager = {
                 lastUpdate: Date.now()
             }
         ];
+
+        this._cache.events = defaultEvents;
         localStorage.setItem('correcaminos_events', JSON.stringify(defaultEvents));
+        this._syncFromCloud('events');
         return defaultEvents;
     },
 
     async saveEvent(id, eventData) {
         const finalId = id || ('event_' + Date.now());
         const finalData = { ...eventData, id: finalId, lastUpdate: Date.now() };
+
+        const events = JSON.parse(localStorage.getItem('correcaminos_events') || '[]');
+        const idx = events.findIndex(e => e.id === finalId);
+        if (idx > -1) events[idx] = finalData;
+        else events.push(finalData);
+        this._cache.events = events;
+        localStorage.setItem('correcaminos_events', JSON.stringify(events));
+
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "events", finalId);
@@ -394,15 +476,15 @@ const DataManager = {
                 console.error("Error al guardar evento en la nube:", e);
             }
         }
-        const events = JSON.parse(localStorage.getItem('correcaminos_events') || '[]');
-        const idx = events.findIndex(e => e.id === finalId);
-        if (idx > -1) events[idx] = finalData;
-        else events.push(finalData);
-        localStorage.setItem('correcaminos_events', JSON.stringify(events));
         return finalData;
     },
 
     async deleteEvent(id) {
+        let events = JSON.parse(localStorage.getItem('correcaminos_events') || '[]');
+        events = events.filter(e => e.id !== id);
+        this._cache.events = events;
+        localStorage.setItem('correcaminos_events', JSON.stringify(events));
+
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "events", id);
@@ -411,9 +493,112 @@ const DataManager = {
                 console.error("Error borrar evento en nube:", e);
             }
         }
-        let events = JSON.parse(localStorage.getItem('correcaminos_events') || '[]');
-        events = events.filter(e => e.id !== id);
-        localStorage.setItem('correcaminos_events', JSON.stringify(events));
+    },
+
+    /**
+     * Rankings y Marcas Técnicas (Club y Provincial)
+     */
+    async getRankingsData() {
+        if (this._cache.rankings) {
+            this._syncFromCloud('rankings');
+            return this._cache.rankings;
+        }
+
+        const local = localStorage.getItem('correcaminos_rankings');
+        if (local) {
+            try {
+                const parsed = JSON.parse(local);
+                parsed.clubRecords = parsed.clubRecords || [];
+                parsed.provincialMinMarks = parsed.provincialMinMarks || [];
+                this._cache.rankings = parsed;
+                this._syncFromCloud('rankings');
+                return parsed;
+            } catch (e) { }
+        }
+
+        const defaultRankings = {
+            clubUpdated: 'Temporada Oficial',
+            clubExternalLink: 'https://drive.google.com/drive/folders/1yegFAOiYFnqurkxIgUmPIcqa7CQTqb_K',
+            provincialUpdated: 'Oficial',
+            provincialExternalLink: '',
+            clubRecords: [],
+            provincialMinMarks: []
+        };
+
+        this._cache.rankings = defaultRankings;
+        localStorage.setItem('correcaminos_rankings', JSON.stringify(defaultRankings));
+        this._syncFromCloud('rankings');
+        return defaultRankings;
+    },
+
+    async saveRankingsData(rankingsData) {
+        const finalData = { ...rankingsData, lastUpdate: Date.now() };
+        this._cache.rankings = finalData;
+        localStorage.setItem('correcaminos_rankings', JSON.stringify(finalData));
+
+        if (this.db) {
+            try {
+                const docRef = window.firebase.firestore.doc(this.db, "settings", "rankings");
+                await window.firebase.firestore.setDoc(docRef, finalData);
+            } catch (e) {
+                console.error("Error al guardar rankings en nube:", e);
+            }
+        }
+        return finalData;
+    },
+
+    /**
+     * Sincronización Asíncrona en Segundo Plano (Non-Blocking)
+     */
+    async _syncFromCloud(collectionKey) {
+        if (!this.db || this._syncing[collectionKey]) return;
+        this._syncing[collectionKey] = true;
+
+        try {
+            if (collectionKey === 'config') {
+                const docRef = window.firebase.firestore.doc(this.db, "settings", "general");
+                const snap = await window.firebase.firestore.getDoc(docRef);
+                if (snap.exists) {
+                    const data = snap.data();
+                    this._cache.config = data;
+                    localStorage.setItem('correcaminos_config', JSON.stringify(data));
+                }
+            } else if (collectionKey === 'events') {
+                const q = window.firebase.firestore.collection(this.db, "events");
+                const snap = await window.firebase.firestore.getDocs(q);
+                const cloudEvents = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (cloudEvents.length > 0) {
+                    this._cache.events = cloudEvents;
+                    localStorage.setItem('correcaminos_events', JSON.stringify(cloudEvents));
+                }
+            } else if (collectionKey === 'rankings') {
+                const docRef = window.firebase.firestore.doc(this.db, "settings", "rankings");
+                const snap = await window.firebase.firestore.getDoc(docRef);
+                if (snap.exists) {
+                    const data = snap.data();
+                    data.clubRecords = data.clubRecords || [];
+                    data.provincialMinMarks = data.provincialMinMarks || [];
+                    this._cache.rankings = data;
+                    localStorage.setItem('correcaminos_rankings', JSON.stringify(data));
+                }
+            } else if (collectionKey === 'users') {
+                const q = window.firebase.firestore.collection(this.db, "users");
+                const snap = await window.firebase.firestore.getDocs(q);
+                const cloudUsers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                this._cache.users = cloudUsers;
+                localStorage.setItem('correcaminos_users', JSON.stringify(cloudUsers));
+            } else if (collectionKey === 'partners') {
+                const q = window.firebase.firestore.collection(this.db, "partners");
+                const snap = await window.firebase.firestore.getDocs(q);
+                const cloudPartners = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                this._cache.partners = cloudPartners;
+                localStorage.setItem('correcaminos_partners', JSON.stringify(cloudPartners));
+            }
+        } catch (err) {
+            console.warn(`Sincronización en segundo plano [${collectionKey}] diferida:`, err);
+        } finally {
+            this._syncing[collectionKey] = false;
+        }
     }
 };
 

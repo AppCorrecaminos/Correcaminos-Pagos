@@ -241,17 +241,16 @@ function getFirstPendingMonth(payments, currentMonthName) {
 async function updateUI() {
     if (!currentUser) return;
     try {
-        // Refrescar datos del usuario desde la nube si está conectado
+        // Refrescar sesión en segundo plano sin congelar la UI
         if (window.DataManager.db && currentUser.id !== 'local_admin') {
-            const freshUser = await window.DataManager.getUser(currentUser.id);
-            if (freshUser) {
-                currentUser = freshUser;
-                try {
-                    localStorage.setItem('correcaminos_session', JSON.stringify(currentUser));
-                } catch (errStorage) {
-                    console.warn("Storage lleno al actualizar sesión en updateUI:", errStorage);
+            window.DataManager.getUser(currentUser.id).then(freshUser => {
+                if (freshUser) {
+                    currentUser = freshUser;
+                    try {
+                        localStorage.setItem('correcaminos_session', JSON.stringify(currentUser));
+                    } catch (errStorage) { }
                 }
-            }
+            }).catch(() => {});
         }
 
         const config = await window.DataManager.getConfig();
@@ -261,10 +260,12 @@ async function updateUI() {
         ];
 
         if (currentUser.role === 'admin') {
-            await renderAdminDashboard();
-            await renderAdminUsers();
-            await renderAdminCC();
-            await renderAdminEvents();
+            await Promise.all([
+                renderAdminDashboard(),
+                renderAdminUsers(),
+                renderAdminCC(),
+                renderAdminEvents()
+            ]);
             renderActivitiesConfig(activities);
             const socIn = document.getElementById('config-social');
             if (socIn) socIn.value = config.socialFee || 3000;
@@ -273,9 +274,12 @@ async function updateUI() {
                 renderAdminCC(payments);
             });
         } else {
-            await renderUserDashboard();
+            // Renderizado ultrarrápido simultáneo
+            renderUserDashboard();
             startCountdownTimer();
             renderUserEvents();
+            renderSportsHub();
+
             const payments = await window.DataManager.getPaymentsByUser(currentUser.id);
             const nameDisp = document.getElementById('user-display-name');
             if (nameDisp) nameDisp.innerText = currentUser.name;
@@ -289,6 +293,7 @@ async function updateUI() {
             if (children.length === 0) {
                 if (breakdownContainer) breakdownContainer.innerHTML = '<div class="card"><div class="card-body">No hay atletas registrados.</div></div>';
                 renderAthletes([], activities);
+                renderSportsHub();
                 return;
             }
 
@@ -751,6 +756,7 @@ function openEditUserModal(user) {
 
 function setupEventListeners() {
     setupEventModalListeners();
+    setupSportsHubListeners();
 
     // Login
     document.getElementById('login-form')?.addEventListener('submit', async (e) => {
@@ -3076,6 +3082,7 @@ function setupEventModalListeners() {
             toast(id ? 'Evento actualizado' : 'Evento creado con éxito');
             renderAdminEvents();
             renderUserEvents();
+            renderSportsHub();
             updateCountdownTimer();
         });
     }
@@ -3160,7 +3167,286 @@ async function renderAdminEvents() {
                 toast('Evento eliminado');
                 renderAdminEvents();
                 renderUserEvents();
+                renderSportsHub();
                 updateCountdownTimer();
+            }
+        });
+    });
+}
+
+/**
+ * ==========================================================================
+ * Centro Deportivo: Próximos Eventos & Rankings (Estilo Federación)
+ * ==========================================================================
+ */
+
+async function renderSportsHub() {
+    const hubContainer = document.getElementById('hub-own-events-container');
+    if (!hubContainer) return;
+
+    const events = await window.DataManager.getEvents();
+    const rankings = await window.DataManager.getRankingsData();
+
+    // Actualizar leyendas de fecha en los banners
+    const clubDateEl = document.getElementById('hub-club-ranking-updated');
+    if (clubDateEl && rankings.clubUpdated) {
+        clubDateEl.innerText = `Tabla oficial del club • Actualizado ${rankings.clubUpdated}`;
+    }
+    const provDateEl = document.getElementById('hub-provincial-ranking-updated');
+    if (provDateEl && rankings.provincialUpdated) {
+        provDateEl.innerText = `Federación Provincial • ${rankings.provincialUpdated}`;
+    }
+
+    // Filtrar torneos propios organizados por Correcaminos
+    const ownEvents = events
+        .filter(e => e.isOwnEvent === true)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    hubContainer.innerHTML = '';
+
+    if (ownEvents.length === 0) {
+        hubContainer.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 1.25rem; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; color: #64748b;">
+                <p style="margin: 0; font-size: 0.85rem;"><i class="fas fa-calendar-check" style="color: #f59e0b;"></i> Próximamente se anunciarán nuevos torneos organizados por Correcaminos.</p>
+            </div>
+        `;
+        return;
+    }
+
+    ownEvents.forEach(e => {
+        const evtDate = new Date(e.date);
+        const day = evtDate.getDate();
+        const month = evtDate.toLocaleDateString('es-AR', { month: 'short' }).replace('.', '');
+        const year = evtDate.getFullYear();
+        const time = evtDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+
+        const item = document.createElement('div');
+        item.className = 'hub-event-item';
+        item.innerHTML = `
+            <div class="hub-event-date-box">
+                <span class="hub-day">${day}</span>
+                <span class="hub-month">${month}</span>
+                <span class="hub-year">${year}</span>
+            </div>
+            <div class="hub-event-info">
+                <h5 title="${e.title}">${e.title}</h5>
+                <p title="${e.location}"><i class="fas fa-map-marker-alt" style="color: #f59e0b;"></i> ${e.location}</p>
+                <p style="font-size: 0.72rem; color: #cbd5e1; margin-top: 2px;"><i class="fas fa-clock"></i> ${time} hs • ${e.category || 'Atletismo'}</p>
+            </div>
+        `;
+        hubContainer.appendChild(item);
+    });
+}
+
+function setupSportsHubListeners() {
+    // Botón para abrir pestaña del calendario
+    document.getElementById('btn-hub-see-all-events')?.addEventListener('click', () => {
+        const calNav = document.querySelector('.nav-link[data-target="user-events-tab"]');
+        if (calNav) calNav.click();
+    });
+
+    // Abrir Modal Ranking Correcaminos
+    document.getElementById('btn-open-ranking-club')?.addEventListener('click', async () => {
+        const rankings = await window.DataManager.getRankingsData();
+        const driveLinkBtn = document.getElementById('link-open-club-drive');
+        const noLinkMsg = document.getElementById('club-rank-no-link-msg');
+
+        if (rankings.clubExternalLink && rankings.clubExternalLink.trim() !== '') {
+            if (driveLinkBtn) {
+                driveLinkBtn.href = rankings.clubExternalLink.trim();
+                driveLinkBtn.style.display = 'inline-flex';
+            }
+            if (noLinkMsg) noLinkMsg.style.display = 'none';
+        } else {
+            if (driveLinkBtn) driveLinkBtn.style.display = 'none';
+            if (noLinkMsg) noLinkMsg.style.display = 'block';
+        }
+
+        document.getElementById('modal-ranking-club')?.classList.add('active');
+    });
+
+    // Abrir Modal Ranking Provincial
+    document.getElementById('btn-open-ranking-provincial')?.addEventListener('click', async () => {
+        const rankings = await window.DataManager.getRankingsData();
+        const driveLinkBtn = document.getElementById('link-open-prov-drive');
+        const noLinkMsg = document.getElementById('prov-rank-no-link-msg');
+
+        if (rankings.provincialExternalLink && rankings.provincialExternalLink.trim() !== '') {
+            if (driveLinkBtn) {
+                driveLinkBtn.href = rankings.provincialExternalLink.trim();
+                driveLinkBtn.style.display = 'inline-flex';
+            }
+            if (noLinkMsg) noLinkMsg.style.display = 'none';
+        } else {
+            if (driveLinkBtn) driveLinkBtn.style.display = 'none';
+            if (noLinkMsg) noLinkMsg.style.display = 'block';
+        }
+
+        document.getElementById('modal-ranking-provincial')?.classList.add('active');
+    });
+
+    // Formulario de Configuración de Rankings (Admin)
+    const configRankForm = document.getElementById('config-rankings-form');
+    if (configRankForm) {
+        // Cargar valores iniciales en los inputs del formulario
+        window.DataManager.getRankingsData().then(rankings => {
+            const clubLinkInput = document.getElementById('cfg-rank-club-link');
+            const clubUpdatedInput = document.getElementById('cfg-rank-club-updated');
+            const provLinkInput = document.getElementById('cfg-rank-prov-link');
+            const provUpdatedInput = document.getElementById('cfg-rank-prov-updated');
+
+            if (clubLinkInput) clubLinkInput.value = rankings.clubExternalLink || '';
+            if (clubUpdatedInput) clubUpdatedInput.value = rankings.clubUpdated || '';
+            if (provLinkInput) provLinkInput.value = rankings.provExternalLink || rankings.provincialExternalLink || '';
+            if (provUpdatedInput) provUpdatedInput.value = rankings.provUpdated || rankings.provincialUpdated || '';
+        });
+
+        configRankForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const current = await window.DataManager.getRankingsData();
+            current.clubExternalLink = document.getElementById('cfg-rank-club-link')?.value.trim() || '';
+            current.clubUpdated = document.getElementById('cfg-rank-club-updated')?.value.trim() || 'Agosto 2026';
+            current.provincialExternalLink = document.getElementById('cfg-rank-prov-link')?.value.trim() || '';
+            current.provincialUpdated = document.getElementById('cfg-rank-prov-updated')?.value.trim() || 'Temporada Oficial 2026';
+
+            await window.DataManager.saveRankingsData(current);
+            toast('Enlaces y configuración de Rankings guardados');
+            renderSportsHub();
+        });
+    }
+
+    // Modal Admin: Administrar Marcas del Club
+    document.getElementById('btn-admin-manage-club-records')?.addEventListener('click', async () => {
+        await renderAdminClubRecordsTable();
+        document.getElementById('modal-manage-club-records')?.classList.add('active');
+    });
+
+    document.getElementById('form-add-club-record')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const category = document.getElementById('add-rec-category').value.trim();
+        const discipline = document.getElementById('add-rec-discipline').value.trim();
+        const athlete = document.getElementById('add-rec-athlete').value.trim();
+        const mark = document.getElementById('add-rec-mark').value.trim();
+        const tournament = document.getElementById('add-rec-tournament').value.trim();
+
+        const current = await window.DataManager.getRankingsData();
+        if (!current.clubRecords) current.clubRecords = [];
+        current.clubRecords.push({ category, discipline, athlete, mark, tournament });
+
+        await window.DataManager.saveRankingsData(current);
+        toast('Marca añadida con éxito');
+        e.target.reset();
+        await renderAdminClubRecordsTable();
+        renderSportsHub();
+    });
+
+    // Modal Admin: Administrar Marcas Mínimas Provinciales
+    document.getElementById('btn-admin-manage-prov-marks')?.addEventListener('click', async () => {
+        await renderAdminProvMarksTable();
+        document.getElementById('modal-manage-prov-marks')?.classList.add('active');
+    });
+
+    document.getElementById('form-add-prov-mark')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const category = document.getElementById('add-prov-category').value.trim();
+        const discipline = document.getElementById('add-prov-discipline').value.trim();
+        const minMark = document.getElementById('add-prov-minmark').value.trim();
+        const record = document.getElementById('add-prov-record').value.trim();
+
+        const current = await window.DataManager.getRankingsData();
+        if (!current.provincialMinMarks) current.provincialMinMarks = [];
+        current.provincialMinMarks.push({ category, discipline, minMark, record });
+
+        await window.DataManager.saveRankingsData(current);
+        toast('Marca mínima añadida');
+        e.target.reset();
+        await renderAdminProvMarksTable();
+        renderSportsHub();
+    });
+}
+
+async function renderAdminClubRecordsTable() {
+    const tbody = document.querySelector('#table-admin-manage-club tbody');
+    if (!tbody) return;
+    const rankings = await window.DataManager.getRankingsData();
+    const records = rankings.clubRecords || [];
+    tbody.innerHTML = '';
+
+    if (records.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" align="center" style="padding: 1rem; color: var(--text-muted);">No hay marcas cargadas.</td></tr>`;
+        return;
+    }
+
+    records.forEach((r, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><b>${r.category}</b></td>
+            <td>${r.discipline}</td>
+            <td>${r.athlete}</td>
+            <td><b style="color:#f59e0b;">${r.mark}</b></td>
+            <td>${r.tournament || '---'}</td>
+            <td>
+                <button type="button" class="btn-action reject btn-del-club-record" data-index="${idx}" title="Eliminar fila" style="color:var(--danger);">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('.btn-del-club-record').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const idx = parseInt(btn.dataset.index);
+            const current = await window.DataManager.getRankingsData();
+            if (current.clubRecords) {
+                current.clubRecords.splice(idx, 1);
+                await window.DataManager.saveRankingsData(current);
+                toast('Fila eliminada');
+                await renderAdminClubRecordsTable();
+                renderSportsHub();
+            }
+        });
+    });
+}
+
+async function renderAdminProvMarksTable() {
+    const tbody = document.querySelector('#table-admin-manage-prov tbody');
+    if (!tbody) return;
+    const rankings = await window.DataManager.getRankingsData();
+    const marks = rankings.provincialMinMarks || [];
+    tbody.innerHTML = '';
+
+    if (marks.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" align="center" style="padding: 1rem; color: var(--text-muted);">No hay marcas cargadas.</td></tr>`;
+        return;
+    }
+
+    marks.forEach((m, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><b>${m.category}</b></td>
+            <td>${m.discipline}</td>
+            <td><b style="color:#2563eb;">${m.minMark}</b></td>
+            <td>${m.record || '---'}</td>
+            <td>
+                <button type="button" class="btn-action reject btn-del-prov-mark" data-index="${idx}" title="Eliminar fila" style="color:var(--danger);">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('.btn-del-prov-mark').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const idx = parseInt(btn.dataset.index);
+            const current = await window.DataManager.getRankingsData();
+            if (current.provincialMinMarks) {
+                current.provincialMinMarks.splice(idx, 1);
+                await window.DataManager.saveRankingsData(current);
+                toast('Fila eliminada');
+                await renderAdminProvMarksTable();
+                renderSportsHub();
             }
         });
     });

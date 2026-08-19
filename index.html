@@ -260,6 +260,66 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Centro Deportivo y Competencias (Estilo Federación) -->
+                    <div class="sports-hub-section" style="margin-bottom: 2rem;">
+                        <div class="sports-hub-header" style="margin-bottom: 1.25rem;">
+                            <h3 style="font-size: 1.2rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="fas fa-trophy" style="color: var(--secondary);"></i> Centro de Competencias y Rankings
+                            </h3>
+                            <p class="text-xs" style="color: var(--text-muted); margin-top: 0.2rem;">Próximos eventos institucionales y tablas oficiales de marcas técnicas</p>
+                        </div>
+
+                        <!-- 1. Próximos Eventos Correcaminos (Tarjetas estilo app FDPA) -->
+                        <div class="hub-block" style="margin-bottom: 1.5rem;">
+                            <div class="hub-block-title-row" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 0.4rem; margin: 0;">
+                                    <i class="fas fa-star" style="color: #f59e0b;"></i> Próximos Eventos Correcaminos
+                                </h4>
+                                <button type="button" class="btn-text" id="btn-hub-see-all-events" style="font-size: 0.8rem; font-weight: 700; color: var(--secondary); display: flex; align-items: center; gap: 0.3rem;">
+                                    Abrir calendario <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                            <div id="hub-own-events-container" class="hub-events-row">
+                                <!-- Se genera dinámicamente -->
+                            </div>
+                        </div>
+
+                        <!-- 2. Banners Estilo Federación: Ranking Correcaminos y Ranking Provincial -->
+                        <div class="hub-ranking-banners">
+                            <div class="hub-banner-card" id="btn-open-ranking-club">
+                                <div class="hub-banner-content">
+                                    <div class="hub-banner-icon club">
+                                        <i class="fas fa-medal"></i>
+                                    </div>
+                                    <div class="hub-banner-info">
+                                        <h4>Ranking Correcaminos</h4>
+                                        <p>Mejores marcas oficiales y récords del club</p>
+                                        <span class="hub-banner-date" id="hub-club-ranking-updated">Tabla oficial del club • Actualizado 2026</span>
+                                    </div>
+                                </div>
+                                <div class="hub-banner-arrow">
+                                    <i class="fas fa-chevron-right"></i>
+                                </div>
+                            </div>
+
+                            <div class="hub-banner-card" id="btn-open-ranking-provincial">
+                                <div class="hub-banner-content">
+                                    <div class="hub-banner-icon provincial">
+                                        <i class="fas fa-award"></i>
+                                    </div>
+                                    <div class="hub-banner-info">
+                                        <h4>Ranking Provincial</h4>
+                                        <p>Marcas mínimas clasificatorias y ranking oficial</p>
+                                        <span class="hub-banner-date" id="hub-provincial-ranking-updated">Federación Provincial • Oficial</span>
+                                    </div>
+                                </div>
+                                <div class="hub-banner-arrow">
+                                    <i class="fas fa-chevron-right"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Pestaña 2: Pagos y Cuenta Corriente (Información Financiera) -->
@@ -761,6 +821,56 @@
                                 <button id="btn-save-activities" class="btn-primary" style="margin-top: 1rem;">Guardar
                                     Actividades</button>
                             </div>
+                        </div>
+
+                        <!-- Configuración de Rankings y Enlaces Oficiales (Google Drive / Web) -->
+                        <div class="card" style="grid-column: 1 / -1; margin-top: 1.5rem;">
+                            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <h3><i class="fas fa-trophy" style="color: #f59e0b;"></i> Configuración de Rankings y Enlaces Oficiales</h3>
+                                    <p class="text-xs" style="color: var(--text-muted);">Configura los enlaces a Google Drive, planillas de cálculo y tablas de marcas técnicas</p>
+                                </div>
+                            </div>
+                            <form id="config-rankings-form" class="card-body">
+                                <div class="form-grid-2">
+                                    <div style="background: #f8fafc; padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border);">
+                                        <h4 style="font-size: 0.95rem; color: var(--primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                                            <i class="fas fa-medal" style="color: #f59e0b;"></i> Ranking Correcaminos
+                                        </h4>
+                                        <div class="form-group">
+                                            <label for="cfg-rank-club-link">Enlace de Google Drive / Planilla / PDF (Opcional)</label>
+                                            <input type="url" id="cfg-rank-club-link" placeholder="https://docs.google.com/spreadsheets/d/... o link a Drive">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cfg-rank-club-updated">Texto de Actualización</label>
+                                            <input type="text" id="cfg-rank-club-updated" placeholder="Ej: Agosto 2026">
+                                        </div>
+                                        <button type="button" class="btn-text" id="btn-admin-manage-club-records" style="font-weight: 700; color: var(--secondary); margin-top: 0.5rem; display: inline-flex; align-items: center; gap: 0.35rem;">
+                                            <i class="fas fa-table"></i> Administrar Tabla de Marcas del Club
+                                        </button>
+                                    </div>
+
+                                    <div style="background: #f8fafc; padding: 1.25rem; border-radius: 10px; border: 1px solid var(--border);">
+                                        <h4 style="font-size: 0.95rem; color: var(--primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.4rem;">
+                                            <i class="fas fa-award" style="color: #3b82f6;"></i> Ranking Provincial
+                                        </h4>
+                                        <div class="form-group">
+                                            <label for="cfg-rank-prov-link">Enlace Oficial Federación / Drive / Web (Opcional)</label>
+                                            <input type="url" id="cfg-rank-prov-link" placeholder="https://... o link a Drive/Web">
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cfg-rank-prov-updated">Texto de Actualización</label>
+                                            <input type="text" id="cfg-rank-prov-updated" placeholder="Ej: Temporada Oficial 2026">
+                                        </div>
+                                        <button type="button" class="btn-text" id="btn-admin-manage-prov-marks" style="font-weight: 700; color: #2563eb; margin-top: 0.5rem; display: inline-flex; align-items: center; gap: 0.35rem;">
+                                            <i class="fas fa-table"></i> Administrar Marcas Mínimas Provinciales
+                                        </button>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn-primary" style="margin-top: 1.25rem;">
+                                    <i class="fas fa-save"></i> Guardar Enlaces de Rankings
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -1366,6 +1476,166 @@
                 </div>
                 <div class="modal-actions" style="margin-top: 1.5rem; display: flex; justify-content: center;">
                     <button type="button" class="btn-primary close-modal" style="width: 100%;">Cerrar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Ranking Correcaminos -->
+        <div id="modal-ranking-club" class="modal">
+            <div class="modal-content" style="max-width: 540px;">
+                <div class="modal-header">
+                    <div style="display: flex; align-items: center; gap: 0.6rem;">
+                        <i class="fas fa-medal" style="color: #f59e0b; font-size: 1.4rem;"></i>
+                        <div>
+                            <h3 style="margin: 0;">Ranking Correcaminos</h3>
+                            <p class="text-xs" id="modal-club-rank-subtitle" style="margin: 0; color: var(--text-muted);">Resultados y registros oficiales del club</p>
+                        </div>
+                    </div>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body" style="padding: 1.5rem 0; text-align: center;">
+                    <div id="club-rank-drive-container" style="background: #f8fafc; border: 1px solid var(--border); border-radius: 12px; padding: 1.75rem 1.25rem;">
+                        <div style="width: 56px; height: 56px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; margin: 0 auto 0.85rem auto;">
+                            <i class="fas fa-trophy"></i>
+                        </div>
+                        <h4 style="font-size: 1.1rem; color: var(--primary); margin-bottom: 0.4rem;">Planilla Oficial de Resultados y Marcas</h4>
+                        <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.5; padding: 0 0.5rem;">
+                            Los resultados, marcas técnicas y registros de competencias de los atletas del club se encuentran disponibles en nuestra planilla oficial de Google Drive.
+                        </p>
+                        <a id="link-open-club-drive" href="#" target="_blank" class="btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem; background: #0f766e; color: white; text-decoration: none; padding: 0.75rem 1.4rem; border-radius: 8px; font-weight: 600; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(15, 118, 110, 0.25);">
+                            <i class="fab fa-google-drive"></i> Abrir Planilla en Google Drive
+                        </a>
+                        <p id="club-rank-no-link-msg" style="display: none; font-size: 0.85rem; color: #64748b; margin-top: 0.75rem;">
+                            <i class="fas fa-info-circle"></i> Configura el enlace de Google Drive desde el panel de Administración > Configuración.
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="text-xs" style="color: var(--text-muted);"><i class="fas fa-check-circle" style="color: var(--success);"></i> Escuela de Atletismo Correcaminos</span>
+                    <button type="button" class="btn-primary close-modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Ranking Provincial -->
+        <div id="modal-ranking-provincial" class="modal">
+            <div class="modal-content" style="max-width: 540px;">
+                <div class="modal-header">
+                    <div style="display: flex; align-items: center; gap: 0.6rem;">
+                        <i class="fas fa-award" style="color: #3b82f6; font-size: 1.4rem;"></i>
+                        <div>
+                            <h3 style="margin: 0;">Ranking Provincial</h3>
+                            <p class="text-xs" id="modal-prov-rank-subtitle" style="margin: 0; color: var(--text-muted);">Federación Provincial de Atletismo</p>
+                        </div>
+                    </div>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body" style="padding: 1.5rem 0; text-align: center;">
+                    <div id="prov-rank-drive-container" style="background: #f8fafc; border: 1px solid var(--border); border-radius: 12px; padding: 1.75rem 1.25rem;">
+                        <div style="width: 56px; height: 56px; background: rgba(59, 130, 246, 0.15); color: #2563eb; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; margin: 0 auto 0.85rem auto;">
+                            <i class="fas fa-award"></i>
+                        </div>
+                        <h4 style="font-size: 1.1rem; color: var(--primary); margin-bottom: 0.4rem;">Marcas Mínimas y Clasificaciones Provinciales</h4>
+                        <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.5; padding: 0 0.5rem;">
+                            Consulta las marcas mínimas clasificatorias para torneos nacionales y el ranking oficial de la Federación de Atletismo.
+                        </p>
+                        <a id="link-open-prov-drive" href="#" target="_blank" class="btn-primary" style="display: inline-flex; align-items: center; gap: 0.5rem; background: #1d4ed8; color: white; text-decoration: none; padding: 0.75rem 1.4rem; border-radius: 8px; font-weight: 600; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(29, 78, 216, 0.25);">
+                            <i class="fas fa-external-link-alt"></i> Ver Ranking Oficial / Drive
+                        </a>
+                        <p id="prov-rank-no-link-msg" style="display: none; font-size: 0.85rem; color: #64748b; margin-top: 0.75rem;">
+                            <i class="fas fa-info-circle"></i> Configura el enlace oficial desde el panel de Administración > Configuración.
+                        </p>
+                    </div>
+                </div>
+                <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="text-xs" style="color: var(--text-muted);"><i class="fas fa-info-circle" style="color: #3b82f6;"></i> Información Oficial</span>
+                    <button type="button" class="btn-primary close-modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Admin: Administrar Marcas del Club -->
+        <div id="modal-manage-club-records" class="modal">
+            <div class="modal-content" style="max-width: 750px;">
+                <div class="modal-header">
+                    <h3>Administrar Marcas y Récords del Club</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-add-club-record" style="background: #f8fafc; padding: 1rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1rem;">
+                        <h4 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--primary);">+ Añadir Nueva Marca</h4>
+                        <div class="form-grid-2">
+                            <input type="text" id="add-rec-category" placeholder="Categoría (Ej: U14)" required>
+                            <input type="text" id="add-rec-discipline" placeholder="Prueba (Ej: 80m Llanos)" required>
+                            <input type="text" id="add-rec-athlete" placeholder="Nombre Atleta" required>
+                            <input type="text" id="add-rec-mark" placeholder="Marca (Ej: 10.42 seg / 4.85 m)" required>
+                        </div>
+                        <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                            <input type="text" id="add-rec-tournament" placeholder="Torneo / Sede (Ej: Torneo Apertura 2026)" style="flex: 1;">
+                            <button type="submit" class="btn-primary btn-sm"><i class="fas fa-plus"></i> Agregar Fila</button>
+                        </div>
+                    </form>
+                    <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
+                        <table id="table-admin-manage-club">
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th>Prueba</th>
+                                    <th>Atleta</th>
+                                    <th>Marca</th>
+                                    <th>Torneo</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-primary close-modal">Listo / Cerrar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Admin: Administrar Marcas Provinciales -->
+        <div id="modal-manage-prov-marks" class="modal">
+            <div class="modal-content" style="max-width: 750px;">
+                <div class="modal-header">
+                    <h3>Administrar Marcas Mínimas Provinciales</h3>
+                    <button class="close-modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form id="form-add-prov-mark" style="background: #f8fafc; padding: 1rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1rem;">
+                        <h4 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: #2563eb;">+ Añadir Marca Mínima</h4>
+                        <div class="form-grid-2">
+                            <input type="text" id="add-prov-category" placeholder="Categoría (Ej: U16 Masculino)" required>
+                            <input type="text" id="add-prov-discipline" placeholder="Prueba (Ej: 100m Llanos)" required>
+                            <input type="text" id="add-prov-minmark" placeholder="Marca Mínima (Ej: 12.00 seg)" required>
+                            <input type="text" id="add-prov-record" placeholder="Récord Provincial (Ej: 11.10 seg)">
+                        </div>
+                        <div style="margin-top: 0.5rem; text-align: right;">
+                            <button type="submit" class="btn-primary btn-sm"><i class="fas fa-plus"></i> Agregar Fila</button>
+                        </div>
+                    </form>
+                    <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
+                        <table id="table-admin-manage-prov">
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th>Prueba</th>
+                                    <th>Marca Mínima</th>
+                                    <th>Récord Provincial</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-primary close-modal">Listo / Cerrar</button>
                 </div>
             </div>
         </div>

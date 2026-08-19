@@ -274,8 +274,7 @@ async function updateUI() {
                 renderAdminCC(payments);
             });
         } else {
-            // Renderizado ultrarrápido simultáneo
-            renderUserDashboard();
+            await renderUserDashboard();
             startCountdownTimer();
             renderUserEvents();
             renderSportsHub();

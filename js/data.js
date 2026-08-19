@@ -31,9 +31,12 @@ const DataManager = {
         if (!this.db) return;
         setTimeout(() => {
             this._syncFromCloud('config');
+            this._syncFromCloud('users');
+            this._syncFromCloud('payments');
             this._syncFromCloud('events');
             this._syncFromCloud('rankings');
-        }, 80);
+            this._syncFromCloud('partners');
+        }, 50);
     },
 
     /**
@@ -51,6 +54,21 @@ const DataManager = {
             } catch (e) { }
         }
 
+        if (this.db) {
+            try {
+                const docRef = window.firebase.firestore.doc(this.db, "settings", "general");
+                const snap = await window.firebase.firestore.getDoc(docRef);
+                if (snap.exists) {
+                    const data = snap.data();
+                    this._cache.config = data;
+                    localStorage.setItem('correcaminos_config', JSON.stringify(data));
+                    return data;
+                }
+            } catch (e) {
+                console.warn("Error leyendo config de nube:", e);
+            }
+        }
+
         const defaultConfig = {
             socialFee: 5000,
             lateFeeAmount: 5000,
@@ -65,7 +83,6 @@ const DataManager = {
 
         this._cache.config = defaultConfig;
         localStorage.setItem('correcaminos_config', JSON.stringify(defaultConfig));
-        this._syncFromCloud('config');
         return defaultConfig;
     },
 
@@ -89,8 +106,22 @@ const DataManager = {
      * Gestión de Usuarios
      */
     async getUsers() {
+        if (this.db) {
+            try {
+                const q = window.firebase.firestore.collection(this.db, "users");
+                const snapshot = await window.firebase.firestore.getDocs(q);
+                const cloudUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (cloudUsers.length > 0) {
+                    this._cache.users = cloudUsers;
+                    localStorage.setItem('correcaminos_users', JSON.stringify(cloudUsers));
+                    return cloudUsers;
+                }
+            } catch (e) {
+                console.warn("Error leyendo usuarios de nube, usando locales.", e);
+            }
+        }
+
         if (this._cache.users && this._cache.users.length > 0) {
-            this._syncFromCloud('users');
             return this._cache.users;
         }
 
@@ -98,12 +129,10 @@ const DataManager = {
         if (local) {
             try {
                 this._cache.users = JSON.parse(local);
-                this._syncFromCloud('users');
                 return this._cache.users;
             } catch (e) { }
         }
 
-        this._syncFromCloud('users');
         return [];
     },
 
@@ -111,21 +140,6 @@ const DataManager = {
         if (!uid) return null;
         const targetId = uid.toLowerCase().trim();
 
-        // 1. Caché en memoria
-        if (this._cache.userById && this._cache.userById[targetId]) {
-            return this._cache.userById[targetId];
-        }
-
-        // 2. Caché local
-        const users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
-        const u = users.find(x => x.id === targetId || (x.username && x.username.toLowerCase().trim() === targetId));
-        if (u) {
-            if (!this._cache.userById) this._cache.userById = {};
-            this._cache.userById[targetId] = u;
-            return u;
-        }
-
-        // 3. Consulta si no está en local
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "users", targetId);
@@ -139,6 +153,18 @@ const DataManager = {
             } catch (e) {
                 console.warn("Error leyendo usuario de nube:", e);
             }
+        }
+
+        if (this._cache.userById && this._cache.userById[targetId]) {
+            return this._cache.userById[targetId];
+        }
+
+        const users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
+        const u = users.find(x => x.id === targetId || (x.username && x.username.toLowerCase().trim() === targetId));
+        if (u) {
+            if (!this._cache.userById) this._cache.userById = {};
+            this._cache.userById[targetId] = u;
+            return u;
         }
         return null;
     },
@@ -192,8 +218,20 @@ const DataManager = {
      * Pagos y Comprobantes
      */
     async getPayments() {
+        if (this.db) {
+            try {
+                const q = window.firebase.firestore.collection(this.db, "payments");
+                const snapshot = await window.firebase.firestore.getDocs(q);
+                const cloudPayments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                this._cache.payments = cloudPayments;
+                localStorage.setItem('correcaminos_payments', JSON.stringify(cloudPayments));
+                return cloudPayments;
+            } catch (e) {
+                console.warn("Error leyendo pagos de nube, usando locales.", e);
+            }
+        }
+
         if (this._cache.payments && this._cache.payments.length > 0) {
-            this._syncFromCloud('payments');
             return this._cache.payments;
         }
 
@@ -201,12 +239,10 @@ const DataManager = {
         if (local) {
             try {
                 this._cache.payments = JSON.parse(local).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                this._syncFromCloud('payments');
                 return this._cache.payments;
             } catch (e) { }
         }
 
-        this._syncFromCloud('payments');
         return [];
     },
 
@@ -587,12 +623,23 @@ const DataManager = {
                 const cloudUsers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 this._cache.users = cloudUsers;
                 localStorage.setItem('correcaminos_users', JSON.stringify(cloudUsers));
+            } else if (collectionKey === 'payments') {
+                const q = window.firebase.firestore.collection(this.db, "payments");
+                const snap = await window.firebase.firestore.getDocs(q);
+                const cloudPayments = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                this._cache.payments = cloudPayments;
+                localStorage.setItem('correcaminos_payments', JSON.stringify(cloudPayments));
             } else if (collectionKey === 'partners') {
                 const q = window.firebase.firestore.collection(this.db, "partners");
                 const snap = await window.firebase.firestore.getDocs(q);
                 const cloudPartners = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 this._cache.partners = cloudPartners;
                 localStorage.setItem('correcaminos_partners', JSON.stringify(cloudPartners));
+            } else if (collectionKey === 'coupons') {
+                const q = window.firebase.firestore.collection(this.db, "coupons");
+                const snap = await window.firebase.firestore.getDocs(q);
+                const cloudCoupons = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                localStorage.setItem('correcaminos_coupons', JSON.stringify(cloudCoupons));
             }
         } catch (err) {
             console.warn(`Sincronización en segundo plano [${collectionKey}] diferida:`, err);

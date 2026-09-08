@@ -213,11 +213,37 @@ function getActivitiesFromList(containerId) {
     }).join(', ');
 }
 
+function matchActivity(categoryOrActivity, filterValue) {
+    if (!filterValue || filterValue === 'ALL') return true;
+    if (!categoryOrActivity) return false;
+    const cleanStr = s => s.toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+    const cTarget = cleanStr(categoryOrActivity);
+    const cFilter = cleanStr(filterValue);
+
+    if (cFilter.includes('pre')) {
+        return cTarget.includes('pre');
+    }
+    if (cFilter === 'competitivo' || cFilter === 'eq competitivo') {
+        return cTarget.includes('competitivo') && !cTarget.includes('pre');
+    }
+    if (cFilter.includes('infantil')) {
+        return cTarget.includes('infantil');
+    }
+    if (cFilter.includes('libre')) {
+        return cTarget.includes('libre');
+    }
+    return cTarget.includes(cFilter);
+}
+
 function getChildList(user) {
     if (user.athletes && user.athletes.length > 0) {
         return user.athletes.map(a => ({
             name: a.name,
             category: a.activity || a.category || 'Mayores',
+            activity: a.activity || a.category || 'Mayores',
+            ageCategory: a.category || 'Mayores',
+            previousActivity: a.previousActivity || '',
+            activityStartMonth: a.activityStartMonth || 'Febrero',
             discountType: a.discountType || 'none',
             discountValue: parseFloat(a.discountValue || 0),
             discountReason: a.discountReason || ''
@@ -548,6 +574,15 @@ function renderAthletes(children, activities) {
                 document.getElementById('ath-address').value = data.address || '';
                 document.getElementById('ath-rules-accepted').checked = data.rulesAccepted || false;
 
+                if (document.getElementById('ath-activity-start-month')) {
+                    document.getElementById('ath-activity-start-month').value = data.activityStartMonth || 'Febrero';
+                }
+                if (document.getElementById('ath-discount-type')) {
+                    document.getElementById('ath-discount-type').value = data.discountType || 'none';
+                    document.getElementById('ath-discount-value').value = data.discountValue || 0;
+                    document.getElementById('ath-discount-reason').value = data.discountReason || '';
+                }
+
                 // Reset medical cert status in modal
                 const certStatus = document.getElementById('medical-cert-status');
                 const certName = document.getElementById('medical-cert-name');
@@ -713,6 +748,10 @@ async function openAdminAthleteFile(userId, athleteIndex) {
     document.getElementById('ath-address').value = athlete.address || '';
     document.getElementById('ath-rules-accepted').checked = athlete.rulesAccepted || false;
 
+    if (document.getElementById('ath-activity-start-month')) {
+        document.getElementById('ath-activity-start-month').value = athlete.activityStartMonth || 'Febrero';
+    }
+
     // Cargar datos de Beca / Bonificación
     if (document.getElementById('ath-discount-type')) {
         document.getElementById('ath-discount-type').value = athlete.discountType || 'none';
@@ -747,7 +786,13 @@ function openEditUserModal(user) {
     document.getElementById('edit-u-id').value = user.id || user.username;
     document.getElementById('edit-u-name').value = user.name || '';
     document.getElementById('edit-u-username').value = user.username || '';
-    setupActivityPicker('edit-u-activities-list', 'edit-u-activity-picker', 'edit-u-ath-name-input', 'btn-edit-u-add-activity', user.children || '');
+
+    let childrenStr = user.children || '';
+    if ((!childrenStr || childrenStr.trim() === '') && user.athletes && user.athletes.length > 0) {
+        childrenStr = user.athletes.map(a => `${a.name} (${a.activity || a.category})`).join(', ');
+    }
+
+    setupActivityPicker('edit-u-activities-list', 'edit-u-activity-picker', 'edit-u-ath-name-input', 'btn-edit-u-add-activity', childrenStr);
     document.getElementById('edit-u-pass').value = user.password || '';
     document.getElementById('edit-u-role').value = user.role || 'user';
     document.getElementById('edit-user-modal').classList.add('active');
@@ -853,11 +898,15 @@ function setupEventListeners() {
         e.preventDefault();
         const id = document.getElementById('edit-u-id').value;
         const existingUser = (await window.DataManager.getUser(id)) || {};
+        const activitiesStr = getActivitiesFromList('edit-u-activities-list');
+        const athletes = existingUser.athletes ? [...existingUser.athletes] : [];
+
         await window.DataManager.saveUser(id, {
             ...existingUser,
             name: document.getElementById('edit-u-name').value,
             username: document.getElementById('edit-u-username').value.toLowerCase().trim(),
-            children: getActivitiesFromList('edit-u-activities-list'),
+            children: activitiesStr || existingUser.children || '',
+            athletes: athletes,
             password: document.getElementById('edit-u-pass').value,
             role: document.getElementById('edit-u-role').value
         });
@@ -916,7 +965,11 @@ function setupEventListeners() {
                 const kids = parseChildren(u.children);
                 if (!u.athletes) u.athletes = [];
                 kids.forEach(k => {
-                    const exists = u.athletes.some(a => a.name.trim().toLowerCase() === k.name.trim().toLowerCase());
+                    const cleanK = k.name.trim().toLowerCase();
+                    const exists = u.athletes.some(a => {
+                        const cleanA = (a.name || '').trim().toLowerCase();
+                        return cleanA === cleanK || cleanA.includes(cleanK) || cleanK.includes(cleanA);
+                    });
                     if (!exists) {
                         u.athletes.push({
                             name: k.name, category: k.category, activity: k.category,
@@ -924,7 +977,7 @@ function setupEventListeners() {
                         });
                     }
                 });
-                u.children = "";
+                u.children = u.athletes.map(a => `${a.name} (${a.activity || a.category})`).join(', ');
                 await window.DataManager.saveUser(u.id || u.username, u);
                 count++;
             }
@@ -1213,7 +1266,27 @@ function setupEventListeners() {
         const index = document.getElementById('ath-index').value;
         const name = document.getElementById('ath-name').value;
 
+        let targetUser = currentUser;
+        if (editingUserId && currentUser.role === 'admin') {
+            const users = await window.DataManager.getUsers();
+            targetUser = users.find(u => (u.id || u.username) === editingUserId);
+        }
+
+        if (!targetUser) return;
+        if (!targetUser.athletes) targetUser.athletes = [];
+
+        const existingAthlete = (index !== "-1" && targetUser.athletes[parseInt(index, 10)]) ? targetUser.athletes[parseInt(index, 10)] : {};
+        const newActivity = document.getElementById('ath-activity').value;
+        const oldActivity = existingAthlete.activity || existingAthlete.category;
+        let prevAct = existingAthlete.previousActivity || '';
+        let startMonth = document.getElementById('ath-activity-start-month')?.value || existingAthlete.activityStartMonth || 'Febrero';
+
+        if (oldActivity && newActivity && oldActivity !== newActivity) {
+            prevAct = oldActivity;
+        }
+
         const newAthlete = {
+            ...existingAthlete,
             name: name,
             dni: document.getElementById('ath-dni').value,
             birthdate: document.getElementById('ath-birthdate').value,
@@ -1223,26 +1296,17 @@ function setupEventListeners() {
             parentsPhone: document.getElementById('ath-parents-phone').value,
             address: document.getElementById('ath-address').value,
             category: document.getElementById('ath-category').value,
-            activity: document.getElementById('ath-activity').value,
+            activity: newActivity,
+            previousActivity: prevAct,
+            activityStartMonth: startMonth,
             discountType: document.getElementById('ath-discount-type')?.value || 'none',
             discountValue: parseFloat((document.getElementById('ath-discount-value')?.value || '0').replace(/[^0-9.]/g, '')) || 0,
             discountReason: document.getElementById('ath-discount-reason')?.value || '',
             rulesAccepted: document.getElementById('ath-rules-accepted').checked,
-            medicalCert: modal.dataset.tempCert || null
+            medicalCert: (modal.dataset.tempCert !== undefined) ? modal.dataset.tempCert : (existingAthlete.medicalCert || null)
         };
 
-        let targetUser = currentUser;
-
-        // Si hay un editingUserId, significa que el Admin está editando a un usuario
-        if (editingUserId && currentUser.role === 'admin') {
-            const users = await window.DataManager.getUsers();
-            targetUser = users.find(u => (u.id || u.username) === editingUserId);
-        }
-
-        if (!targetUser) return;
-        if (!targetUser.athletes) targetUser.athletes = [];
-
-        if (index !== "-1") targetUser.athletes[index] = newAthlete;
+        if (index !== "-1") targetUser.athletes[parseInt(index, 10)] = newAthlete;
         else targetUser.athletes.push(newAthlete);
 
         // Sincronizar con el string de hijos para facturación
@@ -1879,13 +1943,9 @@ async function renderAdminCC(manualPayments = null) {
 
         const children = getChildList(u);
 
-        // Filtro por Actividad / Categoría (Infantiles, Pre Competitivo, Competitivo, u otros)
+        // Filtro por Actividad / Categoría (Infantiles, Pre-Competitivo, Competitivo, u otros)
         if (selectedActivity !== 'ALL') {
-            const hasActivity = children.some(c => {
-                const catLower = (c.category || '').toLowerCase();
-                const selLower = selectedActivity.toLowerCase();
-                return catLower.includes(selLower);
-            });
+            const hasActivity = children.some(c => matchActivity(c.activity || c.category, selectedActivity));
             if (!hasActivity) return;
         }
 
@@ -1898,14 +1958,27 @@ async function renderAdminCC(manualPayments = null) {
 
         if (!matchesSearch) return;
 
-        let monthlyExpected = 0;
-        let appliesSocial = false;
+        // Cálculo de cuota esperada por mes soportando transiciones de categorías
+        const calculateExpectedForMonth = (targetMonth) => {
+            if (u.paused === true) return 0;
+            const targetMIdx = months.indexOf(targetMonth);
+            let expected = 0;
+            let appliesSocial = false;
 
-        // Si el usuario está PAUSADO, no se le calcula cuota ni genera deuda
-        if (u.paused !== true) {
             children.forEach(kid => {
-                const cleanCategory = kid.category.trim().toLowerCase();
-                const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
+                let actName = kid.activity || kid.category || '';
+                if (kid.previousActivity && kid.activityStartMonth) {
+                    const startIdx = months.indexOf(kid.activityStartMonth);
+                    if (startIdx > -1 && targetMIdx < startIdx) {
+                        actName = kid.previousActivity;
+                    }
+                }
+
+                const cleanAct = (actName || '').trim().toLowerCase();
+                const activity = activities.find(a => a.name.trim().toLowerCase() === cleanAct) ||
+                                 activities.find(a => matchActivity(a.name, cleanAct)) ||
+                                 activities[0];
+
                 let basePrice = activity ? activity.price : (activities[0]?.price || 0);
 
                 // Aplicar Bonificación / Beca del atleta
@@ -1917,11 +1990,13 @@ async function renderAdminCC(manualPayments = null) {
                     basePrice = Math.max(0, basePrice - kid.discountValue);
                 }
 
-                monthlyExpected += basePrice;
+                expected += basePrice;
                 if (activity && activity.social) appliesSocial = true;
             });
-            if (appliesSocial) monthlyExpected += socialFee;
-        }
+
+            if (appliesSocial) expected += socialFee;
+            return expected;
+        };
 
         let totalDebt = 0;
         let monthTds = '';
@@ -1937,6 +2012,7 @@ async function renderAdminCC(manualPayments = null) {
         let targetMonthStatus = 'VOID'; // OK, DEBT, PENDING, VOID
 
         months.forEach(m => {
+            const monthlyExpected = calculateExpectedForMonth(m);
             const paid = userPayments.filter(p => p.month === m && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0);
             const isFull = paid >= monthlyExpected && monthlyExpected > 0;
             const isPartial = paid > 0 && paid < monthlyExpected;
@@ -2473,6 +2549,45 @@ async function generateCCPDFContent(doc, logoImg, isSingleMonth, selectedMonth) 
     let headers = [];
     let tableBody = [];
 
+    const calculateExpectedForUserMonth = (targetUser, targetMonth) => {
+        if (targetUser.paused === true) return 0;
+        const targetMIdx = months.indexOf(targetMonth);
+        let expected = 0;
+        let appliesSocial = false;
+        const uKids = getChildList(targetUser);
+
+        uKids.forEach(kid => {
+            let actName = kid.activity || kid.category || '';
+            if (kid.previousActivity && kid.activityStartMonth) {
+                const startIdx = months.indexOf(kid.activityStartMonth);
+                if (startIdx > -1 && targetMIdx < startIdx) {
+                    actName = kid.previousActivity;
+                }
+            }
+
+            const cleanAct = (actName || '').trim().toLowerCase();
+            const activity = activities.find(a => a.name.trim().toLowerCase() === cleanAct) ||
+                             activities.find(a => matchActivity(a.name, cleanAct)) ||
+                             activities[0];
+
+            let basePrice = activity ? activity.price : (activities[0]?.price || 0);
+
+            if (kid.discountType === 'full') {
+                basePrice = 0;
+            } else if (kid.discountType === 'percent' && kid.discountValue > 0) {
+                basePrice = Math.max(0, basePrice * (1 - (kid.discountValue / 100)));
+            } else if (kid.discountType === 'fixed' && kid.discountValue > 0) {
+                basePrice = Math.max(0, basePrice - kid.discountValue);
+            }
+
+            expected += basePrice;
+            if (activity && activity.social) appliesSocial = true;
+        });
+
+        if (appliesSocial) expected += socialFee;
+        return expected;
+    };
+
     if (isSingleMonth) {
         // FORMATO VERTICAL (PORTRAIT) - REPORTES INDIVIDUALES DE UN MES
         headers = [["Familia / Socio", "Atletas / Categoría", "Cuota Esperada", "Monto Abonado", "Estado Cuota", "Saldo Pendiente"]];
@@ -2487,35 +2602,20 @@ async function generateCCPDFContent(doc, logoImg, isSingleMonth, selectedMonth) 
             const children = getChildList(u);
 
             if (selectedActivity !== 'ALL') {
-                const hasActivity = children.some(c => (c.category || '').toLowerCase().includes(selectedActivity.toLowerCase()));
+                const hasActivity = children.some(c => matchActivity(c.activity || c.category, selectedActivity));
                 if (!hasActivity) return;
             }
 
-            let monthlyExpected = 0;
-            let appliesSocial = false;
+            const monthlyExpected = calculateExpectedForUserMonth(u, selectedMonth);
 
-            if (u.paused !== true) {
-                children.forEach(kid => {
-                    const cleanCategory = kid.category.trim().toLowerCase();
-                    const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
-                    let basePrice = activity ? activity.price : (activities[0]?.price || 0);
+            const uidTarget = (u.id || u.username || '').toLowerCase().trim();
+            const unameTarget = (u.username || u.id || '').toLowerCase().trim();
+            const userPayments = payments.filter(p => p && (
+                (p.userId && p.userId.toLowerCase().trim() === uidTarget) ||
+                (p.userId && p.userId.toLowerCase().trim() === unameTarget) ||
+                (p.username && p.username.toLowerCase().trim() === unameTarget)
+            ));
 
-                    // Aplicar Bonificación / Beca del atleta
-                    if (kid.discountType === 'full') {
-                        basePrice = 0;
-                    } else if (kid.discountType === 'percent' && kid.discountValue > 0) {
-                        basePrice = Math.max(0, basePrice * (1 - (kid.discountValue / 100)));
-                    } else if (kid.discountType === 'fixed' && kid.discountValue > 0) {
-                        basePrice = Math.max(0, basePrice - kid.discountValue);
-                    }
-
-                    monthlyExpected += basePrice;
-                    if (activity && activity.social) appliesSocial = true;
-                });
-                if (appliesSocial) monthlyExpected += socialFee;
-            }
-
-            const userPayments = payments.filter(p => p.userId === (u.id || u.username));
             const paid = userPayments.filter(p => p.month === selectedMonth && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0);
             const isFull = paid >= monthlyExpected && monthlyExpected > 0;
             const isPartial = paid > 0 && paid < monthlyExpected;
@@ -2539,7 +2639,7 @@ async function generateCCPDFContent(doc, logoImg, isSingleMonth, selectedMonth) 
             totalPaid += paid;
             totalDebtMonth += debtVal;
 
-            const kidsStr = children.map(c => `${c.name} (${c.category})`).join('\n');
+            const kidsStr = children.map(c => `${c.name} (${c.activity || c.category})`).join('\n');
 
             tableBody.push([
                 u.name,
@@ -2607,35 +2707,21 @@ async function generateCCPDFContent(doc, logoImg, isSingleMonth, selectedMonth) 
             const children = getChildList(u);
 
             if (selectedActivity !== 'ALL') {
-                const hasActivity = children.some(c => (c.category || '').toLowerCase().includes(selectedActivity.toLowerCase()));
+                const hasActivity = children.some(c => matchActivity(c.activity || c.category, selectedActivity));
                 if (!hasActivity) return;
             }
 
-            if (u.paused !== true) {
-                children.forEach(kid => {
-                    const cleanCategory = kid.category.trim().toLowerCase();
-                    const activity = activities.find(a => a.name.trim().toLowerCase() === cleanCategory);
-                    let basePrice = activity ? activity.price : (activities[0]?.price || 0);
-
-                    // Aplicar Bonificación / Beca del atleta
-                    if (kid.discountType === 'full') {
-                        basePrice = 0;
-                    } else if (kid.discountType === 'percent' && kid.discountValue > 0) {
-                        basePrice = Math.max(0, basePrice * (1 - (kid.discountValue / 100)));
-                    } else if (kid.discountType === 'fixed' && kid.discountValue > 0) {
-                        basePrice = Math.max(0, basePrice - kid.discountValue);
-                    }
-
-                    monthlyExpected += basePrice;
-                    if (activity && activity.social) appliesSocial = true;
-                });
-                if (appliesSocial) monthlyExpected += socialFee;
-            }
-
             let totalDebt = 0;
-            const userPayments = payments.filter(p => p.userId === (u.id || u.username));
+            const uidTarget = (u.id || u.username || '').toLowerCase().trim();
+            const unameTarget = (u.username || u.id || '').toLowerCase().trim();
+            const userPayments = payments.filter(p => p && (
+                (p.userId && p.userId.toLowerCase().trim() === uidTarget) ||
+                (p.userId && p.userId.toLowerCase().trim() === unameTarget) ||
+                (p.username && p.username.toLowerCase().trim() === unameTarget)
+            ));
 
             const monthCells = months.map(m => {
+                const monthlyExpected = calculateExpectedForUserMonth(u, m);
                 const paid = userPayments.filter(p => p.month === m && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0);
                 const isFull = paid >= monthlyExpected && monthlyExpected > 0;
                 const isPartial = paid > 0 && paid < monthlyExpected;
@@ -2661,7 +2747,7 @@ async function generateCCPDFContent(doc, logoImg, isSingleMonth, selectedMonth) 
                 if (selectedStatus === 'PENDING' && statusCell !== 'PEND') return;
             }
 
-            const kidsStr = children.map(c => `${c.name} (${c.category})`).join(', ');
+            const kidsStr = children.map(c => `${c.name} (${c.activity || c.category})`).join(', ');
 
             tableBody.push([
                 u.name,
@@ -3242,13 +3328,56 @@ async function renderSportsHub() {
 
 /**
  * ==========================================================================
- * Motor de Atletismo y Navegación de Rankings por Banners
+ * Motor de Atletismo, Categorías CADA y Navegación de Rankings por Banners
  * ==========================================================================
  */
 
+/**
+ * Motor de Categorías Oficiales CADA / World Athletics
+ * @param {string|number} birthDateOrYear - Fecha de nacimiento (YYYY-MM-DD, DD/MM/YYYY) o año
+ * @param {number} referenceYear - Año de competencia o temporada (por defecto año actual)
+ * @returns {string} Categoría oficial CADA ('U12', 'U14', 'U16', 'U18', 'U20', 'U23', 'Mayores', 'Máster')
+ */
+function calculateCADACategory(birthDateOrYear, referenceYear = new Date().getFullYear()) {
+    if (!birthDateOrYear) return 'Mayores';
+    let birthYear;
+    if (typeof birthDateOrYear === 'number') {
+        birthYear = birthDateOrYear;
+    } else if (typeof birthDateOrYear === 'string') {
+        const str = birthDateOrYear.trim();
+        if (str.includes('-')) {
+            const parts = str.split('-');
+            birthYear = parseInt(parts[0].length === 4 ? parts[0] : parts[2], 10);
+        } else if (str.includes('/')) {
+            const parts = str.split('/');
+            birthYear = parseInt(parts[parts.length - 1], 10);
+            if (birthYear < 100) birthYear = birthYear <= 30 ? 2000 + birthYear : 1900 + birthYear;
+        } else {
+            birthYear = parseInt(str, 10);
+        }
+    }
+    if (isNaN(birthYear) || birthYear < 1900 || birthYear > referenceYear) return 'Mayores';
+
+    const athleticAge = referenceYear - birthYear;
+
+    if (athleticAge < 12) return 'U12';       // 10 y 11 años (Pre-infantil y menores)
+    if (athleticAge <= 13) return 'U14';      // 12 y 13 años (Infantil)
+    if (athleticAge <= 15) return 'U16';      // 14 y 15 años (Cadete)
+    if (athleticAge <= 17) return 'U18';      // 16 y 17 años (Menor)
+    if (athleticAge <= 19) return 'U20';      // 18 y 19 años (Juvenil)
+    if (athleticAge <= 22) return 'U23';      // 20 a 22 años (Sub-23)
+    if (athleticAge < 35) return 'Mayores';   // 23 a 34 años (Mayores / Libre)
+    
+    // Máster: 35 años en adelante
+    const masterBlock = Math.floor(athleticAge / 5) * 5;
+    return `M${masterBlock}`;
+}
+
+window.calculateCADACategory = calculateCADACategory;
+
 const RankingFlowState = {
     gender: null,       // 'M' | 'F'
-    category: null,     // 'U12', 'U14', 'U16', 'U18', 'U20', 'Mayores', 'Infantil'
+    category: null,     // 'U12', 'U14', 'U16', 'U18', 'U20', 'U23', 'Mayores', 'Máster'
     discipline: null    // 'Lanzamiento de Jabalina', '80 mts', etc.
 };
 
@@ -3376,16 +3505,25 @@ async function renderRankingFlow() {
         return;
     }
 
-    // 3. NIVEL 2: SELECCIÓN DE CATEGORÍA
+    // 3. NIVEL 2: SELECCIÓN DE CATEGORÍA CADA
     if (RankingFlowState.gender && !RankingFlowState.category) {
-        const standardCategories = ['Infantil', 'U12', 'U14', 'U16', 'U18', 'U20', 'Mayores'];
+        const standardCategories = ['U12', 'U14', 'U16', 'U18', 'U20', 'U23', 'Mayores', 'Máster'];
         const genderRecords = records.filter(r => r.gender === RankingFlowState.gender);
 
         const catMap = {};
         standardCategories.forEach(cat => { catMap[cat] = 0; });
         genderRecords.forEach(r => {
             const c = r.category || 'Mayores';
-            catMap[c] = (catMap[c] || 0) + 1;
+            // Normalizar si viene como 'Infantil' -> 'U14'
+            const normC = (c === 'Infantil' || c === 'U14') ? 'U14' : 
+                          (c === 'Cadete' || c === 'U16') ? 'U16' : 
+                          (c === 'Menor' || c === 'U18') ? 'U18' : 
+                          (c === 'Juvenil' || c === 'U20') ? 'U20' : 
+                          (c === 'Sub-23' || c === 'Sub23' || c === 'U23') ? 'U23' : 
+                          (c === 'Pre-infantil' || c === 'Preinfantil' || c === 'U12') ? 'U12' : 
+                          (c.startsWith('M') && c.length >= 3) ? 'Máster' : c;
+
+            catMap[normC] = (catMap[normC] || 0) + 1;
         });
 
         const allCats = [...new Set([...standardCategories, ...genderRecords.map(r => r.category).filter(Boolean)])];
@@ -3414,7 +3552,7 @@ async function renderRankingFlow() {
                 <i class="fas fa-arrow-left"></i> Volver a Ramas
             </button>
             <div style="margin-bottom: 1rem;">
-                <h4 style="font-size: 1rem; color: var(--primary); margin: 0 0 0.25rem 0;">Categorías - ${genderLabel}</h4>
+                <h4 style="font-size: 1rem; color: var(--primary); margin: 0 0 0.25rem 0;">Categorías CADA - ${genderLabel}</h4>
                 <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0;">Selecciona una categoría para ver las pruebas con marcas registradas</p>
             </div>
             <div class="ranking-grid-banners">

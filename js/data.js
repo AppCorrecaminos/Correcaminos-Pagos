@@ -317,10 +317,52 @@ const DataManager = {
 
     fileToBase64(file) {
         return new Promise((res, rej) => {
-            const r = new FileReader();
-            r.readAsDataURL(file);
-            r.onload = () => res(r.result);
-            r.onerror = e => rej(e);
+            if (!file) return res(null);
+
+            // Si es imagen, comprimir para garantizar que quepa en Firestore (<1MB) y no sature LocalStorage (<5MB)
+            if (file.type && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const maxDim = 1200;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > maxDim || height > maxDim) {
+                            if (width > height) {
+                                height = Math.round((height * maxDim) / width);
+                                width = maxDim;
+                            } else {
+                                width = Math.round((width * maxDim) / height);
+                                height = maxDim;
+                            }
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // Exportar a JPEG optimizado (calidad 0.7 reduce 5MB a ~100KB)
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                        res(compressedBase64);
+                    };
+                    img.onerror = () => {
+                        res(event.target.result);
+                    };
+                };
+                reader.onerror = e => rej(e);
+            } else {
+                // PDF u otros documentos
+                const r = new FileReader();
+                r.readAsDataURL(file);
+                r.onload = () => res(r.result);
+                r.onerror = e => rej(e);
+            }
         });
     },
 
@@ -656,6 +698,44 @@ const DataManager = {
         } finally {
             this._syncing[collectionKey] = false;
         }
+    },
+
+    /**
+     * Motor de Categorías Oficiales CADA / World Athletics
+     */
+    calculateCADACategory(birthDateOrYear, referenceYear = new Date().getFullYear()) {
+        if (!birthDateOrYear) return 'Mayores';
+        let birthYear;
+        if (typeof birthDateOrYear === 'number') {
+            birthYear = birthDateOrYear;
+        } else if (typeof birthDateOrYear === 'string') {
+            const str = birthDateOrYear.trim();
+            if (str.includes('-')) {
+                const parts = str.split('-');
+                birthYear = parseInt(parts[0].length === 4 ? parts[0] : parts[2], 10);
+            } else if (str.includes('/')) {
+                const parts = str.split('/');
+                birthYear = parseInt(parts[parts.length - 1], 10);
+                if (birthYear < 100) birthYear = birthYear <= 30 ? 2000 + birthYear : 1900 + birthYear;
+            } else {
+                birthYear = parseInt(str, 10);
+            }
+        }
+        if (isNaN(birthYear) || birthYear < 1900 || birthYear > referenceYear) return 'Mayores';
+
+        const athleticAge = referenceYear - birthYear;
+
+        if (athleticAge < 12) return 'U12';       // 10 y 11 años (Pre-infantil y menores)
+        if (athleticAge <= 13) return 'U14';      // 12 y 13 años (Infantil)
+        if (athleticAge <= 15) return 'U16';      // 14 y 15 años (Cadete)
+        if (athleticAge <= 17) return 'U18';      // 16 y 17 años (Menor)
+        if (athleticAge <= 19) return 'U20';      // 18 y 19 años (Juvenil)
+        if (athleticAge <= 22) return 'U23';      // 20 a 22 años (Sub-23)
+        if (athleticAge < 35) return 'Mayores';   // 23 a 34 años (Mayores / Libre)
+        
+        // Máster: 35 años en adelante
+        const masterBlock = Math.floor(athleticAge / 5) * 5;
+        return `M${masterBlock}`;
     }
 };
 

@@ -636,8 +636,9 @@
                                     <select id="cc-activity-filter" class="form-input-sm" style="padding: 0.5rem 0.75rem; font-weight: 600; border-radius: 8px; border: 1px solid var(--border);">
                                         <option value="ALL">Todas las actividades</option>
                                         <option value="Infantiles">🏃 Infantiles</option>
-                                        <option value="Pre Competitivo">⚡ Pre Competitivo</option>
+                                        <option value="Pre-Competitivo">⚡ Pre Competitivo</option>
                                         <option value="Competitivo">🏆 Competitivo</option>
+                                        <option value="Libres">👟 Atletas Libres</option>
                                     </select>
                                 </div>
                             </div>
@@ -1234,17 +1235,35 @@
                     </div>
                     <div class="form-grid-2">
                         <div class="form-group">
-                            <label for="ath-activity">Actividad / Categoría de Cobro</label>
+                            <label for="ath-activity">Actividad / Grupo de Trabajo</label>
                             <select id="ath-activity" required>
                                 <!-- Activities will be loaded here -->
                             </select>
                             <small>Esta actividad determina el costo de la cuota mensual.</small>
                         </div>
                         <div class="form-group">
+                            <label for="ath-activity-start-month">Vigencia del Cambio de Grupo</label>
+                            <select id="ath-activity-start-month">
+                                <option value="Febrero">Todo el año (Desde Febrero)</option>
+                                <option value="Marzo">A partir de Marzo</option>
+                                <option value="Abril">A partir de Abril</option>
+                                <option value="Mayo">A partir de Mayo</option>
+                                <option value="Junio">A partir de Junio</option>
+                                <option value="Julio">A partir de Julio</option>
+                                <option value="Agosto">A partir de Agosto</option>
+                                <option value="Septiembre">A partir de Septiembre</option>
+                                <option value="Octubre">A partir de Octubre</option>
+                                <option value="Noviembre">A partir de Noviembre</option>
+                                <option value="Diciembre">A partir de Diciembre</option>
+                            </select>
+                            <small>Indica desde qué mes aplica el cambio de categoría.</small>
+                        </div>
+                    </div>
+                    <div class="form-grid-2">
+                        <div class="form-group">
                             <label for="ath-email">Correo Electrónico de Contacto</label>
                             <input type="email" id="ath-email" required>
                         </div>
-                    </div>
                     <div class="form-grid-2">
                         <div class="form-group">
                             <label for="ath-phone">Teléfono del Atleta</label>
@@ -1602,14 +1621,15 @@
                         </div>
                         <div class="form-grid-2" style="margin-bottom: 0.5rem;">
                             <select id="add-rec-category" required style="background: white;">
-                                <option value="">Seleccione Categoría...</option>
-                                <option value="Infantil">Infantil</option>
-                                <option value="U12">U12</option>
-                                <option value="U14">U14</option>
-                                <option value="U16">U16</option>
-                                <option value="U18">U18</option>
-                                <option value="U20">U20</option>
-                                <option value="Mayores">Mayores</option>
+                                <option value="">Seleccione Categoría CADA...</option>
+                                <option value="U12">U12 / Pre-infantil (10-11 años)</option>
+                                <option value="U14">U14 / Infantil (12-13 años)</option>
+                                <option value="U16">U16 / Cadete (14-15 años)</option>
+                                <option value="U18">U18 / Menor (16-17 años)</option>
+                                <option value="U20">U20 / Juvenil (18-19 años)</option>
+                                <option value="U23">U23 / Sub-23 (20-22 años)</option>
+                                <option value="Mayores">Mayores / Libre (23+ años)</option>
+                                <option value="Máster">Máster (35+ años)</option>
                             </select>
                             <select id="add-rec-gender" style="background: white;">
                                 <option value="M">Masculino</option>

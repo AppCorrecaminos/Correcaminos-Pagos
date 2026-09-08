@@ -85,9 +85,12 @@ const Auth = {
                 if (e.name === 'QuotaExceededError' || e.message?.includes('exceeded the quota')) {
                     // Si llega aquí un QuotaExceededError inesperado
                     try {
-                        localStorage.clear();
+                        localStorage.removeItem('correcaminos_payments');
+                        localStorage.removeItem('correcaminos_events');
+                        localStorage.removeItem('correcaminos_rankings');
+                        localStorage.removeItem('correcaminos_partners');
                     } catch (errClear) {}
-                    return { success: false, message: "La memoria del navegador estaba llena. Hemos limpiado el espacio. Por favor intenta ingresar de nuevo." };
+                    return { success: false, message: "La memoria del navegador estaba llena. Se liberó espacio de caché. Por favor intenta ingresar de nuevo." };
                 }
                 if (e.code === 'permission-denied') {
                     return { success: false, message: "Error: No tienes permisos en Firebase. Revisa las REGLAS de tu base de datos (paso 3B)." };

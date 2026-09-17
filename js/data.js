@@ -299,7 +299,13 @@ const DataManager = {
                 const snapshot = await window.firebase.firestore.getDocs(q);
                 const cloudPayments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                 this._cache.payments = cloudPayments;
-                this._safeSetLocal('correcaminos_payments', cloudPayments);
+                // Guardar en LocalStorage sin las imágenes base64 gigantescas para no saturar memoria móvil (5MB limit)
+                const lightweightPayments = cloudPayments.map(p => {
+                    if (!p.receiptURL || p.receiptURL.length < 200) return p;
+                    const { receiptURL, ...rest } = p;
+                    return { ...rest, hasReceipt: true };
+                });
+                this._safeSetLocal('correcaminos_payments', lightweightPayments);
                 return cloudPayments;
             } catch (e) {
                 console.warn("Error leyendo pagos de nube, usando locales.", e);

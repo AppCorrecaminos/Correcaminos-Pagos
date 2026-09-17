@@ -866,20 +866,18 @@ function setupEventListeners() {
                 document.querySelectorAll('.user-tab').forEach(t => t.classList.remove('active'));
                 targetEl.classList.add('active');
                 if (targetId === 'user-benefits-tab') renderUserBenefits();
-                if (targetId === 'user-events-tab') renderUserEvents();
-                if (targetId === 'user-finance-tab' || targetId === 'user-profile-tab') updateUI();
+                else if (targetId === 'user-events-tab') renderUserEvents();
+                else if (targetId === 'user-finance-tab' || targetId === 'user-profile-tab') updateUI();
             }
 
             link.parentElement.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
             link.classList.add('active');
 
-            // 2. Cargar/Actualizar datos en segundo plano de manera asíncrona no bloqueante
+            // 2. Cargar/Actualizar datos de administración en segundo plano
             setTimeout(() => {
                 if (targetId === 'admin-cc') renderAdminCC();
                 else if (targetId === 'admin-benefits') renderAdminBenefits();
                 else if (targetId === 'admin-events') renderAdminEvents();
-                else if (targetId === 'user-benefits-tab') renderUserBenefits();
-                else if (targetId === 'user-events-tab') renderUserEvents();
             }, 10);
         });
     });
@@ -2381,97 +2379,343 @@ function generateCouponCode() {
     return result;
 }
 
+/**
+ * Generador Autónomo de Códigos QR en Formato Vectorial SVG (Sin Dependencias Externas)
+ * 100% compatible con móviles Android, iOS Safari, PWAs y navegadores de escritorio.
+ */
+window.generateQRSVG = (function() {
+    const PAD0 = 236, PAD1 = 17;
+    const MODE_8BIT_BYTE = 4;
+    const ECL_M = 0; // Error correction level M
+
+    const RS_BLOCK_TABLE = [
+        [1,26,19],[1,26,16],[1,26,13],[1,26,9],
+        [1,44,34],[1,44,28],[1,44,22],[1,44,16],
+        [1,70,55],[1,70,44],[2,35,17],[2,35,13],
+        [1,100,80],[2,50,32],[2,50,24],[4,25,9],
+        [1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],
+        [2,86,68],[4,43,27],[4,43,19],[4,43,15],
+        [2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],
+        [2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],
+        [2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],
+        [2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16]
+    ];
+
+    const CAPACITY_TABLE = [
+        [17,14,11,7],[32,26,20,14],[53,42,32,24],[78,62,46,34],[106,84,60,44],
+        [134,106,74,58],[154,122,86,64],[192,152,108,84],[230,180,130,98],[271,213,151,119]
+    ];
+
+    const EXP_TABLE = new Array(256), LOG_TABLE = new Array(256);
+    for (let h = 0; 8 > h; h++) EXP_TABLE[h] = 1 << h;
+    for (let h = 8; 256 > h; h++) EXP_TABLE[h] = EXP_TABLE[h-4] ^ EXP_TABLE[h-5] ^ EXP_TABLE[h-6] ^ EXP_TABLE[h-8];
+    for (let h = 0; 255 > h; h++) LOG_TABLE[EXP_TABLE[h]] = h;
+
+    function glog(n) { return LOG_TABLE[n]; }
+    function gexp(n) { while (n < 0) n += 255; while (n >= 256) n -= 255; return EXP_TABLE[n]; }
+
+    function Poly(num, shift) {
+        let offset = 0;
+        while (offset < num.length && num[offset] === 0) offset++;
+        this.num = new Array(num.length - offset + shift);
+        for (let i = 0; i < num.length - offset; i++) this.num[i] = num[i + offset];
+        for (let i = num.length - offset; i < this.num.length; i++) this.num[i] = 0;
+    }
+    Poly.prototype.get = function(i) { return this.num[i]; };
+    Poly.prototype.getLength = function() { return this.num.length; };
+    Poly.prototype.multiply = function(e) {
+        const res = new Array(this.getLength() + e.getLength() - 1).fill(0);
+        for (let i = 0; i < this.getLength(); i++) {
+            for (let j = 0; j < e.getLength(); j++) {
+                res[i + j] ^= gexp(glog(this.get(i)) + glog(e.get(j)));
+            }
+        }
+        return new Poly(res, 0);
+    };
+    Poly.prototype.mod = function(e) {
+        if (this.getLength() - e.getLength() < 0) return this;
+        const ratio = glog(this.get(0)) - glog(e.get(0));
+        const res = new Array(this.getLength());
+        for (let i = 0; i < this.getLength(); i++) res[i] = this.get(i);
+        for (let i = 0; i < e.getLength(); i++) res[i] ^= gexp(glog(e.get(i)) + ratio);
+        return new Poly(res, 0).mod(e);
+    };
+
+    function getErrorCorrectPolynomial(e) {
+        let poly = new Poly([1], 0);
+        for (let i = 0; i < e; i++) poly = poly.multiply(new Poly([1, gexp(i)], 0));
+        return poly;
+    }
+
+    function BitBuffer() { this.buffer = []; this.length = 0; }
+    BitBuffer.prototype.get = function(i) { return 1 === (1 & this.buffer[Math.floor(i / 8)] >>> (7 - (i % 8))); };
+    BitBuffer.prototype.put = function(num, len) { for (let i = 0; i < len; i++) this.putBit(1 === (1 & num >>> (len - i - 1))); };
+    BitBuffer.prototype.putBit = function(bit) {
+        const bufIdx = Math.floor(this.length / 8);
+        if (this.buffer.length <= bufIdx) this.buffer.push(0);
+        if (bit) this.buffer[bufIdx] |= 128 >>> (this.length % 8);
+        this.length++;
+    };
+
+    const PATTERN_POSITION_TABLE = [
+        [],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50]
+    ];
+
+    function getBCHTypeInfo(data) {
+        let d = data << 10;
+        while (getBCHDigit(d) - getBCHDigit(1335) >= 0) d ^= 1335 << (getBCHDigit(d) - getBCHDigit(1335));
+        return ((data << 10) | d) ^ 21522;
+    }
+    function getBCHDigit(data) {
+        let digit = 0;
+        while (data !== 0) { digit++; data >>>= 1; }
+        return digit;
+    }
+
+    function getMask(mask, i, j) {
+        switch (mask) {
+            case 0: return (i + j) % 2 === 0;
+            case 1: return i % 2 === 0;
+            case 2: return j % 3 === 0;
+            case 3: return (i + j) % 3 === 0;
+            case 4: return (Math.floor(i / 2) + Math.floor(j / 3)) % 2 === 0;
+            case 5: return (i * j) % 2 + (i * j) % 3 === 0;
+            case 6: return ((i * j) % 2 + (i * j) % 3) % 2 === 0;
+            case 7: return ((i * j) % 3 + (i + j) % 2) % 2 === 0;
+        }
+        return false;
+    }
+
+    function getBestTypeNumber(textLen) {
+        for (let i = 0; i < CAPACITY_TABLE.length; i++) {
+            if (CAPACITY_TABLE[i][1] >= textLen) return i + 1;
+        }
+        return 10;
+    }
+
+    return function(text, size = 180, colorDark = "#1a365d", colorLight = "#ffffff") {
+        const bytes = [];
+        for (let i = 0; i < text.length; i++) {
+            const c = text.charCodeAt(i);
+            if (c < 128) bytes.push(c);
+            else if (c < 2048) { bytes.push(192 | (c >> 6)); bytes.push(128 | (c & 63)); }
+            else { bytes.push(224 | (c >> 12)); bytes.push(128 | ((c >> 6) & 63)); bytes.push(128 | (c & 63)); }
+        }
+
+        const typeNumber = getBestTypeNumber(bytes.length);
+        const moduleCount = typeNumber * 4 + 17;
+        const modules = Array.from({ length: moduleCount }, () => new Array(moduleCount).fill(null));
+
+        function setupProbe(row, col) {
+            for (let r = -1; r <= 7; r++) {
+                if (row + r <= -1 || moduleCount <= row + r) continue;
+                for (let c = -1; c <= 7; c++) {
+                    if (col + c <= -1 || moduleCount <= col + c) continue;
+                    modules[row + r][col + c] = (0 <= r && r <= 6 && (c === 0 || c === 6)) ||
+                                               (0 <= c && c <= 6 && (r === 0 || r === 6)) ||
+                                               (2 <= r && r <= 4 && 2 <= c && c <= 4);
+                }
+            }
+        }
+        setupProbe(0, 0);
+        setupProbe(moduleCount - 7, 0);
+        setupProbe(0, moduleCount - 7);
+
+        const pos = PATTERN_POSITION_TABLE[typeNumber - 1];
+        if (pos) {
+            for (let i = 0; i < pos.length; i++) {
+                for (let j = 0; j < pos.length; j++) {
+                    const r0 = pos[i], c0 = pos[j];
+                    if (modules[r0][c0] !== null) continue;
+                    for (let r = -2; r <= 2; r++) {
+                        for (let c = -2; c <= 2; c++) {
+                            modules[r0 + r][c0 + c] = (r === -2 || r === 2 || c === -2 || c === 2 || (r === 0 && c === 0));
+                        }
+                    }
+                }
+            }
+        }
+
+        for (let r = 8; r < moduleCount - 8; r++) if (modules[r][6] === null) modules[r][6] = (r % 2 === 0);
+        for (let c = 8; c < moduleCount - 8; c++) if (modules[6][c] === null) modules[6][c] = (c % 2 === 0);
+
+        const maskPattern = 0;
+        const typeInfo = getBCHTypeInfo((ECL_M << 3) | maskPattern);
+        for (let i = 0; i < 15; i++) {
+            const mod = (1 === (1 & (typeInfo >> i)));
+            if (i < 6) modules[i][8] = mod;
+            else if (i < 8) modules[i + 1][8] = mod;
+            else modules[moduleCount - 15 + i][8] = mod;
+
+            if (i < 8) modules[8][moduleCount - i - 1] = mod;
+            else if (i < 9) modules[8][15 - i - 1 + 1] = mod;
+            else modules[8][15 - i - 1] = mod;
+        }
+        modules[moduleCount - 8][8] = true;
+
+        const rsIndex = 4 * (typeNumber - 1) + 1;
+        const rsBlocks = RS_BLOCK_TABLE[rsIndex];
+        let totalDataCount = 0;
+        const blockList = [];
+        for (let b = 0; b < rsBlocks.length / 3; b++) {
+            const count = rsBlocks[b * 3 + 0], totalCount = rsBlocks[b * 3 + 1], dataCount = rsBlocks[b * 3 + 2];
+            for (let k = 0; k < count; k++) {
+                blockList.push({ totalCount: totalCount, dataCount: dataCount });
+                totalDataCount += dataCount;
+            }
+        }
+
+        const buffer = new BitBuffer();
+        buffer.put(MODE_8BIT_BYTE, 4);
+        buffer.put(bytes.length, typeNumber < 10 ? 8 : 16);
+        for (let i = 0; i < bytes.length; i++) buffer.put(bytes[i], 8);
+
+        if (buffer.length + 4 <= totalDataCount * 8) buffer.put(0, 4);
+        while (buffer.length % 8 !== 0) buffer.putBit(false);
+        while (buffer.length < totalDataCount * 8) {
+            buffer.put(PAD0, 8);
+            if (buffer.length < totalDataCount * 8) buffer.put(PAD1, 8);
+        }
+
+        let offset = 0;
+        const dataBlocks = [], ecBlocks = [];
+        let maxDataLen = 0, maxEcLen = 0;
+        for (let i = 0; i < blockList.length; i++) {
+            const dLen = blockList[i].dataCount;
+            const ecLen = blockList[i].totalCount - dLen;
+            maxDataLen = Math.max(maxDataLen, dLen);
+            maxEcLen = Math.max(maxEcLen, ecLen);
+
+            const dArr = new Array(dLen);
+            for (let j = 0; j < dLen; j++) dArr[j] = 255 & buffer.buffer[j + offset];
+            offset += dLen;
+            dataBlocks.push(dArr);
+
+            const ecPoly = getErrorCorrectPolynomial(ecLen);
+            const rawPoly = new Poly(dArr, ecPoly.getLength() - 1);
+            const modPoly = rawPoly.mod(ecPoly);
+            const ecArr = new Array(ecPoly.getLength() - 1);
+            for (let j = 0; j < ecArr.length; j++) {
+                const modIdx = j + modPoly.getLength() - ecArr.length;
+                ecArr[j] = modIdx >= 0 ? modPoly.get(modIdx) : 0;
+            }
+            ecBlocks.push(ecArr);
+        }
+
+        const finalBytes = [];
+        for (let j = 0; j < maxDataLen; j++) {
+            for (let i = 0; i < dataBlocks.length; i++) {
+                if (j < dataBlocks[i].length) finalBytes.push(dataBlocks[i][j]);
+            }
+        }
+        for (let j = 0; j < maxEcLen; j++) {
+            for (let i = 0; i < ecBlocks.length; i++) {
+                if (j < ecBlocks[i].length) finalBytes.push(ecBlocks[i][j]);
+            }
+        }
+
+        let byteIdx = 0, bitIdx = 7, dir = -1;
+        let rowPtr = moduleCount - 1;
+        for (let colPtr = moduleCount - 1; colPtr > 0; colPtr -= 2) {
+            if (colPtr === 6) colPtr--;
+            while (true) {
+                for (let c = 0; c < 2; c++) {
+                    const currCol = colPtr - c;
+                    if (modules[rowPtr][currCol] === null) {
+                        let bit = false;
+                        if (byteIdx < finalBytes.length) {
+                            bit = 1 === (1 & (finalBytes[byteIdx] >>> bitIdx));
+                        }
+                        const mask = getMask(maskPattern, rowPtr, currCol);
+                        if (mask) bit = !bit;
+                        modules[rowPtr][currCol] = bit;
+                        bitIdx--;
+                        if (bitIdx === -1) { byteIdx++; bitIdx = 7; }
+                    }
+                }
+                rowPtr += dir;
+                if (rowPtr < 0 || moduleCount <= rowPtr) {
+                    rowPtr -= dir;
+                    dir = -dir;
+                    break;
+                }
+            }
+        }
+
+        let path = "";
+        for (let r = 0; r < moduleCount; r++) {
+            for (let c = 0; c < moduleCount; c++) {
+                if (modules[r][c]) path += "M" + c + " " + r + "h1v1h-1z ";
+            }
+        }
+
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${moduleCount} ${moduleCount}" width="${size}" height="${size}" shape-rendering="crispEdges" style="display:block;margin:0 auto;max-width:100%;height:auto;border-radius:8px;"><rect width="100%" height="100%" fill="${colorLight}"/><path fill="${colorDark}" d="${path}"/></svg>`;
+    };
+})();
+
+/**
+ * Función Global para Forzar Actualización y Limpiar Caché en Móviles
+ */
+window.forceRefreshApp = async function() {
+    toast("Actualizando aplicación...", "info");
+    try {
+        if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+        }
+        if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(r => r.unregister()));
+        }
+    } catch (e) {
+        console.warn("Aviso al limpiar cachés:", e);
+    }
+    localStorage.removeItem('correcaminos_client_ver');
+    localStorage.removeItem('correcaminos_payments');
+    setTimeout(() => {
+        window.location.reload(true);
+    }, 400);
+};
+
 function showCouponModal(code, partnerName, discount, desc) {
     document.getElementById('coupon-partner-name').innerText = partnerName || 'Comercio Amigo';
     document.getElementById('coupon-discount-value').innerText = discount || 'Beneficio';
     document.getElementById('coupon-benefit-desc').innerText = desc || '';
     document.getElementById('coupon-code-text').innerText = code;
 
-    let validationUrl = '';
-    try {
-        validationUrl = new URL(`validar.html?code=${encodeURIComponent(code)}`, window.location.href).href;
-    } catch (errUrl) {
-        validationUrl = `https://appcorrecaminos.github.io/Correcaminos-Pagos/validar.html?code=${encodeURIComponent(code)}`;
-    }
-    if (window.location.protocol === 'file:' || !validationUrl.startsWith('http') || validationUrl.includes('localhost') || validationUrl.includes('127.0.0.1')) {
-        validationUrl = `https://appcorrecaminos.github.io/Correcaminos-Pagos/validar.html?code=${encodeURIComponent(code)}`;
-    }
+    const validationUrl = `https://appcorrecaminos.github.io/Correcaminos-Pagos/validar.html?code=${encodeURIComponent(code)}`;
 
     // 1. Mostrar modal primero
     const modal = document.getElementById('coupon-modal');
     if (modal) modal.classList.add('active');
 
-    // 2. Renderizar QR dentro del contenedor
+    // 2. Renderizar QR dentro del contenedor (SVG Vectorial Directo - 100% Inmune a bugs de Canvas o UserAgent móvil)
     const qrContainer = document.getElementById('coupon-qr-container');
     if (qrContainer) {
         qrContainer.innerHTML = '';
-        let qrRendered = false;
+        let rendered = false;
 
-        // Método A: Generar Canvas en memoria y exportar a Data URL (100% universal en móviles y PWAs)
         try {
-            if (typeof QRCode !== 'undefined' && typeof QRCode.QRCodeModel !== 'undefined') {
-                const typeNum = QRCode.getBestTypeNumber ? QRCode.getBestTypeNumber(validationUrl, 0) : 4;
-                const qrModel = new QRCode.QRCodeModel(typeNum, 0); // CorrectLevel.M = 0
-                qrModel.addData(validationUrl);
-                qrModel.make();
-                const moduleCount = qrModel.getModuleCount();
-
-                const canvas = document.createElement('canvas');
-                const scale = 6;
-                const border = 16;
-                const canvasSize = (moduleCount * scale) + (border * 2);
-                canvas.width = canvasSize;
-                canvas.height = canvasSize;
-                const ctx = canvas.getContext('2d');
-
-                // Fondo blanco
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, canvasSize, canvasSize);
-
-                // Módulos oscuros
-                ctx.fillStyle = '#1a365d';
-                for (let r = 0; r < moduleCount; r++) {
-                    for (let c = 0; c < moduleCount; c++) {
-                        if (qrModel.isDark(r, c)) {
-                            ctx.fillRect(border + (c * scale), border + (r * scale), scale, scale);
-                        }
-                    }
+            if (typeof window.generateQRSVG === 'function') {
+                const svgHtml = window.generateQRSVG(validationUrl, 180, "#1a365d", "#ffffff");
+                if (svgHtml && svgHtml.includes('<svg')) {
+                    qrContainer.innerHTML = svgHtml;
+                    rendered = true;
                 }
-
-                const dataUrl = canvas.toDataURL('image/png');
-                const img = document.createElement('img');
-                img.src = dataUrl;
-                img.alt = 'Código QR de Validación';
-                img.style.width = '180px';
-                img.style.height = '180px';
-                img.style.display = 'block';
-                img.style.margin = '0 auto';
-                img.style.borderRadius = '8px';
-                img.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
-                qrContainer.appendChild(img);
-                qrRendered = true;
             }
-        } catch (errCanvas) {
-            console.warn("Fallo generación Canvas DataURL:", errCanvas);
+        } catch (errSvg) {
+            console.warn("Fallo motor SVG interno:", errSvg);
         }
 
-        // Método B: Generación SVG como alternativa directa
-        if (!qrRendered && typeof QRCode !== 'undefined' && typeof QRCode.generateSVG === 'function') {
+        if (!rendered && typeof QRCode !== 'undefined' && typeof QRCode.generateSVG === 'function') {
             try {
-                qrContainer.innerHTML = QRCode.generateSVG(validationUrl, {
-                    width: 180,
-                    height: 180,
-                    colorDark: "#1a365d",
-                    colorLight: "#ffffff"
-                });
-                qrRendered = true;
-            } catch (errSvg) {
-                console.warn("QRCode.generateSVG falló:", errSvg);
-            }
+                qrContainer.innerHTML = QRCode.generateSVG(validationUrl, { width: 180, height: 180, colorDark: "#1a365d", colorLight: "#ffffff" });
+                rendered = true;
+            } catch (errQc) {}
         }
 
-        // Método C: Fallback online por si no hay soporte de Canvas/SVG
-        if (!qrRendered) {
+        if (!rendered) {
+            // Fallback de contingencia online
             const fallbackImg = document.createElement('img');
             fallbackImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(validationUrl)}`;
             fallbackImg.alt = 'Código QR de Validación';

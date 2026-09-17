@@ -1,4 +1,4 @@
-const CACHE_NAME = 'correcaminos-v3';
+const CACHE_NAME = 'correcaminos-v5';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -28,7 +28,7 @@ const ASSETS_TO_CACHE = [
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Service Worker] Guardando archivos en caché v3...');
+      console.log('[Service Worker] Guardando archivos en caché v5...');
       return Promise.all(
         ASSETS_TO_CACHE.map((url) => 
           cache.add(url).catch((err) => console.warn('[Service Worker] Aviso al cachear:', url, err))
@@ -39,14 +39,14 @@ self.addEventListener('install', (e) => {
   self.skipWaiting();
 });
 
-// Evento de Activación: Limpieza de cachés antiguas al actualizar la versión
+// Evento de Activación: Limpieza agresiva de cualquier versión anterior
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
-            console.log('[Service Worker] Borrando caché antigua:', key);
+            console.log('[Service Worker] Eliminando caché obsoleta:', key);
             return caches.delete(key);
           }
         })
@@ -56,33 +56,48 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
-// Evento Fetch: Estrategia Stale-While-Revalidate para recursos locales y CDN
+// Evento Fetch:
+// 1. Network-First para HTML y scripts .js: Garantiza que cualquier dispositivo móvil siempre ejecute el código más reciente de GitHub al estar conectado.
+// 2. Cache-First para imágenes, fuentes y estilos: Máxima velocidad y soporte offline completo.
 self.addEventListener('fetch', (e) => {
-  // Ignorar solicitudes no GET, llamadas a Firestore API, u otras APIs externas que no sean de assets
   if (e.request.method !== 'GET' || e.request.url.includes('firestore.googleapis.com')) {
+    return;
+  }
+
+  const url = new URL(e.request.url);
+  const isCodeOrDoc = e.request.mode === 'navigate' || 
+                      url.pathname.endsWith('.html') || 
+                      url.pathname.endsWith('.js') ||
+                      url.pathname === '/' ||
+                      url.pathname.endsWith('/Correcaminos-Pagos/') ||
+                      url.pathname.endsWith('/Correcaminos-Pagos');
+
+  if (isCodeOrDoc) {
+    e.respondWith(
+      fetch(e.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const resClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(e.request, resClone));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(e.request).then((cached) => cached || caches.match('./index.html')))
+    );
     return;
   }
 
   e.respondWith(
     caches.match(e.request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Retornar recurso cacheado e intentar actualizar en segundo plano
         fetch(e.request).then((networkResponse) => {
-          if (networkResponse.status === 200) {
+          if (networkResponse && networkResponse.status === 200) {
             caches.open(CACHE_NAME).then((cache) => cache.put(e.request, networkResponse));
           }
-        }).catch(() => { /* Silenciar fallos de red offline */ });
-        
+        }).catch(() => { /* Offline fallback */ });
         return cachedResponse;
       }
-      
-      // Si no está en caché, ir a la red
-      return fetch(e.request).catch(() => {
-        // Fallback a index.html para peticiones de navegación
-        if (e.request.mode === 'navigate') {
-          return caches.match('./index.html');
-        }
-      });
+      return fetch(e.request);
     })
   );
 });

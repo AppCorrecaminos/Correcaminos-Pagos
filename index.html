@@ -12,6 +12,29 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="img/icons/icon-192.png">
     <link rel="shortcut icon" href="img/icons/favicon.ico" type="image/x-icon">
+    <!-- Verificación y Descarte Automático de Caché Móvil -->
+    <script>
+      (function() {
+        const APP_VERSION = 'v5.0-20260917';
+        const stored = localStorage.getItem('correcaminos_client_ver');
+        if (stored !== APP_VERSION) {
+          console.log('[App] Nueva versión detectada (' + APP_VERSION + '). Limpiando almacenamiento temporal...');
+          localStorage.setItem('correcaminos_client_ver', APP_VERSION);
+          if ('caches' in window) {
+            caches.keys().then(function(keys) {
+              keys.forEach(function(k) {
+                if (k !== 'correcaminos-v5') caches.delete(k);
+              });
+            });
+          }
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              regs.forEach(function(r) { r.update(); });
+            });
+          }
+        }
+      })();
+    </script>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -398,9 +421,14 @@
 
             <!-- Pestaña de Beneficios y Convenios del Socio -->
             <div id="user-benefits-tab" class="user-tab">
-                    <header class="dashboard-header">
-                        <h2>Club Correcaminos</h2>
-                        <p>Descuentos y beneficios exclusivos para socios al día</p>
+                    <header class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <h2>Club Correcaminos</h2>
+                            <p>Descuentos y beneficios exclusivos para socios al día</p>
+                        </div>
+                        <button type="button" onclick="window.forceRefreshApp()" class="btn-text" style="font-size:0.8rem; color:var(--text-muted); background:#f1f5f9; padding:0.4rem 0.85rem; border-radius:20px; border:1px solid var(--border); display:inline-flex; align-items:center; gap:0.4rem; cursor:pointer;" title="Forzar actualización de versión y limpiar memoria">
+                            <i class="fas fa-sync-alt"></i> Versión 5.0 • Actualizar
+                        </button>
                     </header>
                     <div id="user-benefits-container" class="athletes-grid">
                         <!-- Se cargará dinámicamente -->
@@ -1721,20 +1749,25 @@
     </div>
 
     <!-- Scripts (Cargados en orden sin módulos con versión de actualización) -->
-    <script src="js/firebase-config.js?v=2.5"></script>
-    <script src="js/data.js?v=2.5"></script>
-    <script src="js/auth.js?v=2.5"></script>
-    <script src="js/qrcode.min.js?v=2.5"></script>
-    <script src="js/app.js?v=2.5"></script>
+    <script src="js/firebase-config.js?v=5.0"></script>
+    <script src="js/data.js?v=5.0"></script>
+    <script src="js/auth.js?v=5.0"></script>
+    <script src="js/qrcode.min.js?v=5.0"></script>
+    <script src="js/app.js?v=5.0"></script>
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js?v=2.5')
+          navigator.serviceWorker.register('./sw.js?v=5.0')
             .then(reg => {
               console.log('Service Worker registrado con éxito. Scope:', reg.scope);
               reg.update();
             })
             .catch(err => console.error('Error al registrar el Service Worker:', err));
+        });
+
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          console.log('[Service Worker] Controlador actualizado. Recargando automáticamente...');
+          window.location.reload();
         });
       }
     </script>

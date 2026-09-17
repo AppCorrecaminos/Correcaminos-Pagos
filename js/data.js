@@ -41,12 +41,25 @@ const DataManager = {
         if (!this.db) return;
         setTimeout(() => {
             this._syncFromCloud('config');
-            this._syncFromCloud('users');
-            this._syncFromCloud('payments');
             this._syncFromCloud('events');
             this._syncFromCloud('rankings');
             this._syncFromCloud('partners');
-        }, 50);
+
+            // Solo administradores sincronizan la base completa de usuarios y pagos
+            let isAdmin = false;
+            try {
+                const s = localStorage.getItem('correcaminos_session');
+                if (s) {
+                    const parsed = JSON.parse(s);
+                    isAdmin = (parsed.role === 'admin');
+                }
+            } catch (e) { }
+
+            if (isAdmin) {
+                this._syncFromCloud('users');
+                this._syncFromCloud('payments');
+            }
+        }, 100);
     },
 
     _safeSetLocal(key, val) {
@@ -123,7 +136,24 @@ const DataManager = {
     /**
      * Gestión de Usuarios
      */
-    async getUsers() {
+    async getUsers(forceRefresh = false) {
+        if (!forceRefresh && this._cache.users && this._cache.users.length > 0) {
+            return this._cache.users;
+        }
+
+        if (!forceRefresh) {
+            const local = localStorage.getItem('correcaminos_users');
+            if (local) {
+                try {
+                    const parsed = JSON.parse(local);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        this._cache.users = parsed;
+                        return this._cache.users;
+                    }
+                } catch (e) { }
+            }
+        }
+
         if (this.db) {
             try {
                 const q = window.firebase.firestore.collection(this.db, "users");
@@ -131,7 +161,7 @@ const DataManager = {
                 const cloudUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 if (cloudUsers.length > 0) {
                     this._cache.users = cloudUsers;
-                    localStorage.setItem('correcaminos_users', JSON.stringify(cloudUsers));
+                    this._safeSetLocal('correcaminos_users', cloudUsers);
                     return cloudUsers;
                 }
             } catch (e) {
@@ -139,24 +169,45 @@ const DataManager = {
             }
         }
 
-        if (this._cache.users && this._cache.users.length > 0) {
-            return this._cache.users;
-        }
-
-        const local = localStorage.getItem('correcaminos_users');
-        if (local) {
-            try {
-                this._cache.users = JSON.parse(local);
-                return this._cache.users;
-            } catch (e) { }
-        }
-
-        return [];
+        return this._cache.users || [];
     },
 
-    async getUser(uid) {
+    async getUser(uid, forceRefresh = false) {
         if (!uid) return null;
         const targetId = uid.toLowerCase().trim();
+
+        if (!forceRefresh) {
+            if (this._cache.userById && this._cache.userById[targetId]) {
+                return this._cache.userById[targetId];
+            }
+            if (this._cache.users && this._cache.users.length > 0) {
+                const found = this._cache.users.find(x => x.id === targetId || (x.username && x.username.toLowerCase().trim() === targetId));
+                if (found) {
+                    if (!this._cache.userById) this._cache.userById = {};
+                    this._cache.userById[targetId] = found;
+                    return found;
+                }
+            }
+            try {
+                const sessionStr = localStorage.getItem('correcaminos_session');
+                if (sessionStr) {
+                    const session = JSON.parse(sessionStr);
+                    if (session.id === targetId || (session.username && session.username.toLowerCase().trim() === targetId)) {
+                        if (!this._cache.userById) this._cache.userById = {};
+                        this._cache.userById[targetId] = session;
+                        return session;
+                    }
+                }
+            } catch (e) { }
+
+            const users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
+            const u = users.find(x => x.id === targetId || (x.username && x.username.toLowerCase().trim() === targetId));
+            if (u) {
+                if (!this._cache.userById) this._cache.userById = {};
+                this._cache.userById[targetId] = u;
+                return u;
+            }
+        }
 
         if (this.db) {
             try {
@@ -173,18 +224,7 @@ const DataManager = {
             }
         }
 
-        if (this._cache.userById && this._cache.userById[targetId]) {
-            return this._cache.userById[targetId];
-        }
-
-        const users = JSON.parse(localStorage.getItem('correcaminos_users') || '[]');
-        const u = users.find(x => x.id === targetId || (x.username && x.username.toLowerCase().trim() === targetId));
-        if (u) {
-            if (!this._cache.userById) this._cache.userById = {};
-            this._cache.userById[targetId] = u;
-            return u;
-        }
-        return null;
+        return (this._cache.userById && this._cache.userById[targetId]) || null;
     },
 
     async saveUser(uid, userData) {
@@ -235,7 +275,24 @@ const DataManager = {
     /**
      * Pagos y Comprobantes
      */
-    async getPayments() {
+    async getPayments(forceRefresh = false) {
+        if (!forceRefresh && this._cache.payments && this._cache.payments.length > 0) {
+            return this._cache.payments;
+        }
+
+        if (!forceRefresh) {
+            const local = localStorage.getItem('correcaminos_payments');
+            if (local) {
+                try {
+                    const parsed = JSON.parse(local).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                    if (parsed.length > 0) {
+                        this._cache.payments = parsed;
+                        return this._cache.payments;
+                    }
+                } catch (e) { }
+            }
+        }
+
         if (this.db) {
             try {
                 const q = window.firebase.firestore.collection(this.db, "payments");
@@ -249,31 +306,24 @@ const DataManager = {
             }
         }
 
-        if (this._cache.payments && this._cache.payments.length > 0) {
-            return this._cache.payments;
-        }
-
-        const local = localStorage.getItem('correcaminos_payments');
-        if (local) {
-            try {
-                this._cache.payments = JSON.parse(local).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                return this._cache.payments;
-            } catch (e) { }
-        }
-
-        return [];
+        return this._cache.payments || [];
     },
 
-    async getPaymentsByUser(userId) {
-        const all = await this.getPayments();
+    async getPaymentsByUser(userId, forceRefresh = false) {
         if (!userId) return [];
+        this._cache.userPayments = this._cache.userPayments || {};
+        if (!forceRefresh && this._cache.userPayments[userId]) {
+            return this._cache.userPayments[userId];
+        }
+
+        const all = await this.getPayments(forceRefresh);
         const targetId = userId.toLowerCase().trim();
         const user = await this.getUser(userId);
         const uname = user ? (user.username || '').toLowerCase().trim() : '';
         const uName = user ? (user.name || '').toLowerCase().trim() : '';
         const athNames = (user && user.athletes ? user.athletes : []).map(a => (a.name || '').toLowerCase().trim()).filter(Boolean);
 
-        return all.filter(p => {
+        const res = all.filter(p => {
             if (!p) return false;
             const pUid = (p.userId || '').toLowerCase().trim();
             const pUname = (p.username || '').toLowerCase().trim();
@@ -288,6 +338,9 @@ const DataManager = {
             }
             return false;
         });
+
+        this._cache.userPayments[userId] = res;
+        return res;
     },
 
     async addPayment(payment) {
@@ -299,6 +352,7 @@ const DataManager = {
         const local = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
         local.push(payment);
         this._cache.payments = local;
+        this._cache.userPayments = {};
         this._safeSetLocal('correcaminos_payments', local);
 
         if (this.db) {
@@ -317,6 +371,7 @@ const DataManager = {
         const p = local.find(x => x.id === id);
         if (p) Object.assign(p, updates);
         this._cache.payments = local;
+        this._cache.userPayments = {};
         this._safeSetLocal('correcaminos_payments', local);
 
         if (this.db) {
@@ -334,6 +389,7 @@ const DataManager = {
         return window.firebase.firestore.onSnapshot(window.firebase.firestore.collection(this.db, "payments"), (snap) => {
             const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
             this._cache.payments = list;
+            this._cache.userPayments = {};
             this._safeSetLocal('correcaminos_payments', list);
             cb(list);
         });

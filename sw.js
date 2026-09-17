@@ -1,4 +1,4 @@
-const CACHE_NAME = 'correcaminos-v1';
+const CACHE_NAME = 'correcaminos-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const ASSETS_TO_CACHE = [
   './js/auth.js',
   './js/data.js',
   './js/firebase-config.js',
+  './js/qrcode.min.js',
   './img/Nuevo Logo Correcaminos.jpeg',
   './img/icons/favicon.ico',
   './img/icons/icon-192.png',

@@ -330,12 +330,12 @@ async function updateUI() {
                 renderAdminCC(payments);
             });
         } else {
-            await renderUserDashboard();
+            const payments = await window.DataManager.getPaymentsByUser(currentUser.id);
+            await renderUserDashboard(payments);
             startCountdownTimer();
             renderUserEvents();
             renderSportsHub();
 
-            const payments = await window.DataManager.getPaymentsByUser(currentUser.id);
             const nameDisp = document.getElementById('user-display-name');
             if (nameDisp) nameDisp.innerText = currentUser.name;
 
@@ -1794,8 +1794,8 @@ function openApproveModal(payment) {
     document.getElementById('approve-payment-modal').classList.add('active');
 }
 
-async function renderUserDashboard() {
-    const payments = await window.DataManager.getPaymentsByUser(currentUser.id);
+async function renderUserDashboard(preloadedPayments = null) {
+    const payments = preloadedPayments || (await window.DataManager.getPaymentsByUser(currentUser.id));
     const config = await window.DataManager.getConfig();
     const activities = config.activities || [];
     const socialFee = config.socialFee || 0;
@@ -2187,13 +2187,15 @@ window.doManualCollection = async (userId, month, amount, userName, kids) => {
  * Módulo de Convenios y Club Correcaminos (PWA)
  */
 
-window.isUserAlDia = async (userId) => {
+window.isUserAlDia = async (userId, userPayments = null) => {
     try {
-        const user = await window.DataManager.getUser(userId);
+        const user = (currentUser && (currentUser.id === userId || currentUser.username === userId))
+            ? currentUser
+            : await window.DataManager.getUser(userId);
         if (!user) return false;
         if (user.role === 'admin') return true;
 
-        const payments = (await window.DataManager.getPaymentsByUser(userId)) || [];
+        const payments = userPayments || (await window.DataManager.getPaymentsByUser(userId)) || [];
 
         const now = new Date();
         const allMonths = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
@@ -2404,47 +2406,59 @@ function showCouponModal(code, partnerName, discount, desc) {
         validationUrl = `https://appcorrecaminos.github.io/Correcaminos-Pagos/validar.html?code=${encodeURIComponent(code)}`;
     }
 
-    const qrContainer = document.getElementById('coupon-qr-container');
-    const qrImg = document.getElementById('coupon-qr-img');
-
-    if (qrContainer) {
-        qrContainer.innerHTML = '';
-    }
-
-    let qrRendered = false;
-    // 1. Generación instantánea 100% offline y local con QRCode.js
-    if (typeof QRCode !== 'undefined' && qrContainer) {
-        try {
-            new QRCode(qrContainer, {
-                text: validationUrl,
-                width: 180,
-                height: 180,
-                colorDark: "#1a365d",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.M
-            });
-            qrRendered = true;
-        } catch (e) {
-            console.warn("Error generando QRCode local:", e);
-        }
-    }
-
-    // 2. Fallback con imagen si QRCode no estuviera disponible
-    if (!qrRendered) {
-        const fallbackImg = qrImg || document.createElement('img');
-        fallbackImg.id = 'coupon-qr-img';
-        fallbackImg.alt = 'Código QR de Validación';
-        fallbackImg.style.width = '180px';
-        fallbackImg.style.height = '180px';
-        fallbackImg.style.display = 'block';
-        fallbackImg.style.margin = '0 auto';
-        fallbackImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(validationUrl)}`;
-        if (qrContainer && !qrContainer.contains(fallbackImg)) {
-            qrContainer.appendChild(fallbackImg);
-        }
-    }
-
     document.getElementById('coupon-modal').classList.add('active');
+
+    const qrContainer = document.getElementById('coupon-qr-container');
+    if (qrContainer) {
+        let qrRendered = false;
+        // 1. Generación pura y ultra-rápida en SVG (funciona 100% offline en cualquier móvil)
+        if (typeof QRCode !== 'undefined' && typeof QRCode.generateSVG === 'function') {
+            try {
+                qrContainer.innerHTML = QRCode.generateSVG(validationUrl, {
+                    width: 180,
+                    height: 180,
+                    colorDark: "#1a365d",
+                    colorLight: "#ffffff"
+                });
+                qrRendered = true;
+            } catch (errSvg) {
+                console.warn("QRCode.generateSVG falló:", errSvg);
+            }
+        }
+
+        // 2. Intentar con constructor tradicional si no hubiera generateSVG
+        if (!qrRendered && typeof QRCode !== 'undefined') {
+            try {
+                qrContainer.innerHTML = '';
+                new QRCode(qrContainer, {
+                    text: validationUrl,
+                    width: 180,
+                    height: 180,
+                    colorDark: "#1a365d",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+                qrRendered = true;
+            } catch (errQc) {
+                console.warn("new QRCode falló:", errQc);
+            }
+        }
+
+        // 3. Fallback online si QRCode.js no estuviera cargado
+        if (!qrRendered) {
+            qrContainer.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(validationUrl)}" alt="Código QR de Validación" style="width:180px;height:180px;display:block;margin:0 auto;border-radius:8px;">`;
+        }
+
+        // Enlace directo opcional para validar con un toque en el celular
+        const oldLink = document.getElementById('coupon-direct-link');
+        if (oldLink) oldLink.remove();
+        const directLinkDiv = document.createElement('div');
+        directLinkDiv.id = 'coupon-direct-link';
+        directLinkDiv.style.marginTop = '12px';
+        directLinkDiv.style.textAlign = 'center';
+        directLinkDiv.innerHTML = `<a href="${validationUrl}" target="_blank" rel="noopener" style="font-size:0.85rem;color:var(--primary,#1a365d);font-weight:600;text-decoration:underline;display:inline-flex;align-items:center;gap:6px;"><i class="fas fa-external-link-alt"></i> Abrir enlace de validación</a>`;
+        qrContainer.parentNode.insertBefore(directLinkDiv, qrContainer.nextSibling);
+    }
 }
 
 async function renderAdminBenefits() {

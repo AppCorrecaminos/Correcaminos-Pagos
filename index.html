@@ -1485,7 +1485,9 @@
                     <p class="text-muted" style="font-size: 0.85rem; margin-bottom: 1rem;">Mostrá este código en el local o escaneá el código QR:</p>
                     
                     <div style="background: white; padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border); display: inline-block; margin-bottom: 1rem; box-shadow: var(--shadow-sm);">
-                        <img id="coupon-qr-img" src="" alt="Código QR de Validación" style="width: 180px; height: 180px; display: block; margin: 0 auto 0.75rem auto;">
+                        <div id="coupon-qr-container" style="width: 180px; height: 180px; margin: 0 auto 0.75rem auto; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                            <img id="coupon-qr-img" src="" alt="Código QR de Validación" style="width: 180px; height: 180px; display: none; margin: 0 auto;">
+                        </div>
                         <span id="coupon-code-text" style="font-family: monospace; font-size: 1.5rem; font-weight: 700; color: var(--primary); letter-spacing: 2px;">CC-XXXXXX</span>
                     </div>
                     
@@ -1722,6 +1724,7 @@
     <script src="js/firebase-config.js"></script>
     <script src="js/data.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/qrcode.min.js"></script>
     <script src="js/app.js"></script>
     <script>
       if ('serviceWorker' in navigator) {

@@ -235,6 +235,36 @@ function matchActivity(categoryOrActivity, filterValue) {
     return cTarget.includes(cFilter);
 }
 
+window.getUserPayments = function(user, allPayments) {
+    if (!user || !allPayments || !Array.isArray(allPayments)) return [];
+    const uidTarget = (user.id || '').toLowerCase().trim();
+    const unameTarget = (user.username || '').toLowerCase().trim();
+    const uDisplayName = (user.name || '').toLowerCase().trim();
+    const athleteNames = (user.athletes || []).map(a => (a.name || '').toLowerCase().trim()).filter(Boolean);
+
+    return allPayments.filter(p => {
+        if (!p) return false;
+        const pUid = (p.userId || '').toLowerCase().trim();
+        const pUname = (p.username || '').toLowerCase().trim();
+        const pName = (p.userDisplayName || p.name || '').toLowerCase().trim();
+        const pChildren = (p.childrenNames || '').toLowerCase().trim();
+
+        // 1. Coincidencia por ID o Username
+        if (uidTarget && (pUid === uidTarget || pUname === uidTarget)) return true;
+        if (unameTarget && (pUid === unameTarget || pUname === unameTarget)) return true;
+
+        // 2. Coincidencia por nombre completo del usuario / familia
+        if (uDisplayName && (pName.includes(uDisplayName) || pUid === uDisplayName)) return true;
+
+        // 3. Coincidencia por atletas pertenecientes a la familia
+        for (const ath of athleteNames) {
+            if (ath && (pChildren.includes(ath) || pName.includes(ath) || pUid === ath)) return true;
+        }
+
+        return false;
+    });
+};
+
 function getChildList(user) {
     if (user.athletes && user.athletes.length > 0) {
         return user.athletes.map(a => ({
@@ -911,7 +941,9 @@ function setupEventListeners() {
             role: document.getElementById('edit-u-role').value
         });
         document.getElementById('edit-user-modal').classList.remove('active');
-        toast('Actualizado'); renderAdminUsers();
+        toast('Actualizado');
+        renderAdminUsers();
+        renderAdminCC();
     });
 
     document.getElementById('btn-add-user')?.addEventListener('click', () => {
@@ -927,7 +959,9 @@ function setupEventListeners() {
         config.lateFeeAmount = parseInt(document.getElementById('config-late-fee').value);
         config.lateFeeDay = parseInt(document.getElementById('config-late-day').value);
         await window.DataManager.updateConfig(config);
-        toast('Configuración guardada'); updateUI();
+        toast('Configuración guardada');
+        updateUI();
+        renderAdminCC();
     });
 
     document.getElementById('btn-sync-to-cloud')?.addEventListener('click', async (e) => {
@@ -1319,8 +1353,10 @@ function setupEventListeners() {
 
         toast('Ficha técnica y actividad actualizadas');
 
-        if (currentUser.role === 'admin') renderAdminUsers();
-        else updateUI();
+        if (currentUser.role === 'admin') {
+            renderAdminUsers();
+            renderAdminCC();
+        } else updateUI();
     });
 
     // Recalcular monto al cambiar mes en pago
@@ -2000,27 +2036,27 @@ async function renderAdminCC(manualPayments = null) {
 
         let totalDebt = 0;
         let monthTds = '';
-        const uidTarget = (u.id || u.username || '').toLowerCase().trim();
-        const unameTarget = (u.username || u.id || '').toLowerCase().trim();
-        const userPayments = payments.filter(p => p && (
-            (p.userId && p.userId.toLowerCase().trim() === uidTarget) ||
-            (p.userId && p.userId.toLowerCase().trim() === unameTarget) ||
-            (p.username && p.username.toLowerCase().trim() === unameTarget)
-        ));
+        const userPayments = window.getUserPayments(u, payments);
 
         // Evaluación por mes para el usuario
         let targetMonthStatus = 'VOID'; // OK, DEBT, PENDING, VOID
 
         months.forEach(m => {
             const monthlyExpected = calculateExpectedForMonth(m);
-            const paid = userPayments.filter(p => p.month === m && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0);
-            const isFull = paid >= monthlyExpected && monthlyExpected > 0;
-            const isPartial = paid > 0 && paid < monthlyExpected;
-            const isDebt = paid === 0 && monthlyExpected > 0;
-            const hasPending = userPayments.some(p => p.month === m && p.status === 'pending');
+            const mPayments = userPayments.filter(p => p.month === m);
+            const paid = mPayments.filter(p => p.status === 'approved').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+            const hasApproved = mPayments.some(p => p.status === 'approved');
+            const hasPending = !hasApproved && mPayments.some(p => p.status === 'pending');
+
+            // Si hay un pago aprobado para este mes, el mes queda saldado (OK) sin generar deuda retroactiva
+            const isFull = hasApproved || (paid >= monthlyExpected && monthlyExpected > 0);
+            const isPartial = !hasApproved && paid > 0 && paid < monthlyExpected;
+            const isDebt = !hasApproved && !hasPending && monthlyExpected > 0 && paid === 0;
+            const isVoid = monthlyExpected === 0 && !hasApproved && !hasPending;
             const isCurrent = m === currentMonthName;
 
-            if (isDebt || isPartial) totalDebt += (monthlyExpected - paid);
+            const remainingDebt = (isFull || isVoid) ? 0 : Math.max(0, monthlyExpected - paid);
+            if (isDebt || isPartial) totalDebt += remainingDebt;
 
             // Si es el mes objetivo para las estadísticas de tarjetas
             if (m === targetMonthForStats) {
@@ -2033,11 +2069,11 @@ async function renderAdminCC(manualPayments = null) {
 
             monthTds += `
                 <td class="month-col ${isCurrent ? 'current-month-col' : ''}" style="${isHighlightedMonth ? 'background-color: rgba(26, 54, 93, 0.08); font-weight: bold;' : ''}">
-                    <div class="status-check ${isFull ? 'ok' : (hasPending ? 'pending' : (isDebt ? 'debt' : 'void'))}" 
-                         onclick="${isDebt || (isPartial && !hasPending) ? `window.doManualCollection('${u.id || u.username}', '${m}', ${monthlyExpected - paid}, '${u.name}', '${children.map(c => c.name).join(', ')}')` : ''}"
-                         style="${isDebt || (isPartial && !hasPending) ? 'cursor:pointer;' : ''}"
-                         title="${m}: $ ${paid.toLocaleString('es-AR')} de $ ${monthlyExpected.toLocaleString('es-AR')} ${hasPending ? '(Hay un pago pendiente de revisión)' : (isDebt ? 'Haz clic para cobro manual' : '')}">
-                        <i class="fas ${isFull ? 'fa-check' : (hasPending ? 'fa-clock' : (isDebt ? 'fa-dollar-sign' : 'fa-minus'))}"></i>
+                    <div class="status-check ${isFull ? 'ok' : (hasPending ? 'pending' : (isDebt ? 'debt' : (isPartial ? 'pending' : 'void')))}" 
+                         onclick="${(isDebt || isPartial) && !hasPending ? `window.doManualCollection('${u.id || u.username}', '${m}', ${remainingDebt}, '${u.name}', '${children.map(c => c.name).join(', ')}')` : ''}"
+                         style="${(isDebt || isPartial) && !hasPending ? 'cursor:pointer;' : ''}"
+                         title="${m}: $ ${paid.toLocaleString('es-AR')} de $ ${monthlyExpected.toLocaleString('es-AR')} ${hasPending ? '(Hay un pago pendiente de revisión)' : (isFull ? '(Aprobado / Al día)' : (isDebt || isPartial ? 'Haz clic para registrar cobro manual' : ''))}">
+                        <i class="fas ${isFull ? 'fa-check' : (hasPending ? 'fa-clock' : (isDebt ? 'fa-dollar-sign' : (isPartial ? 'fa-clock' : 'fa-minus')))}"></i>
                     </div>
                 </td>`;
         });
@@ -2358,11 +2394,55 @@ function showCouponModal(code, partnerName, discount, desc) {
     document.getElementById('coupon-benefit-desc').innerText = desc;
     document.getElementById('coupon-code-text').innerText = code;
 
-    const origin = window.location.origin + window.location.pathname.replace('index.html', '');
-    const validationUrl = `${origin}validar.html?code=${code}`;
-    
+    let validationUrl = '';
+    try {
+        validationUrl = new URL(`validar.html?code=${encodeURIComponent(code)}`, window.location.href).href;
+    } catch (errUrl) {
+        validationUrl = `https://appcorrecaminos.github.io/Correcaminos-Pagos/validar.html?code=${encodeURIComponent(code)}`;
+    }
+    if (window.location.protocol === 'file:' || !validationUrl.startsWith('http') || validationUrl.includes('localhost') || validationUrl.includes('127.0.0.1')) {
+        validationUrl = `https://appcorrecaminos.github.io/Correcaminos-Pagos/validar.html?code=${encodeURIComponent(code)}`;
+    }
+
+    const qrContainer = document.getElementById('coupon-qr-container');
     const qrImg = document.getElementById('coupon-qr-img');
-    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(validationUrl)}`;
+
+    if (qrContainer) {
+        qrContainer.innerHTML = '';
+    }
+
+    let qrRendered = false;
+    // 1. Generación instantánea 100% offline y local con QRCode.js
+    if (typeof QRCode !== 'undefined' && qrContainer) {
+        try {
+            new QRCode(qrContainer, {
+                text: validationUrl,
+                width: 180,
+                height: 180,
+                colorDark: "#1a365d",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            qrRendered = true;
+        } catch (e) {
+            console.warn("Error generando QRCode local:", e);
+        }
+    }
+
+    // 2. Fallback con imagen si QRCode no estuviera disponible
+    if (!qrRendered) {
+        const fallbackImg = qrImg || document.createElement('img');
+        fallbackImg.id = 'coupon-qr-img';
+        fallbackImg.alt = 'Código QR de Validación';
+        fallbackImg.style.width = '180px';
+        fallbackImg.style.height = '180px';
+        fallbackImg.style.display = 'block';
+        fallbackImg.style.margin = '0 auto';
+        fallbackImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(validationUrl)}`;
+        if (qrContainer && !qrContainer.contains(fallbackImg)) {
+            qrContainer.appendChild(fallbackImg);
+        }
+    }
 
     document.getElementById('coupon-modal').classList.add('active');
 }
@@ -2607,20 +2687,14 @@ async function generateCCPDFContent(doc, logoImg, isSingleMonth, selectedMonth) 
             }
 
             const monthlyExpected = calculateExpectedForUserMonth(u, selectedMonth);
-
-            const uidTarget = (u.id || u.username || '').toLowerCase().trim();
-            const unameTarget = (u.username || u.id || '').toLowerCase().trim();
-            const userPayments = payments.filter(p => p && (
-                (p.userId && p.userId.toLowerCase().trim() === uidTarget) ||
-                (p.userId && p.userId.toLowerCase().trim() === unameTarget) ||
-                (p.username && p.username.toLowerCase().trim() === unameTarget)
-            ));
-
-            const paid = userPayments.filter(p => p.month === selectedMonth && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0);
-            const isFull = paid >= monthlyExpected && monthlyExpected > 0;
-            const isPartial = paid > 0 && paid < monthlyExpected;
-            const isDebt = paid === 0 && monthlyExpected > 0;
-            const hasPending = userPayments.some(p => p.month === selectedMonth && p.status === 'pending');
+            const userPayments = window.getUserPayments(u, payments);
+            const mPayments = userPayments.filter(p => p.month === selectedMonth);
+            const paid = mPayments.filter(p => p.status === 'approved').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+            const hasApproved = mPayments.some(p => p.status === 'approved');
+            const hasPending = !hasApproved && mPayments.some(p => p.status === 'pending');
+            const isFull = hasApproved || (paid >= monthlyExpected && monthlyExpected > 0);
+            const isPartial = !hasApproved && paid > 0 && paid < monthlyExpected;
+            const isDebt = !hasApproved && !hasPending && monthlyExpected > 0 && paid === 0;
 
             let statusStr = "PAGADO";
             if (hasPending) statusStr = "PENDIENTE";
@@ -2633,7 +2707,7 @@ async function generateCCPDFContent(doc, logoImg, isSingleMonth, selectedMonth) 
                 if (selectedStatus === 'PENDING' && !hasPending) return;
             }
 
-            const debtVal = Math.max(0, monthlyExpected - paid);
+            const debtVal = (isFull || monthlyExpected === 0) ? 0 : Math.max(0, monthlyExpected - paid);
 
             totalExpect += monthlyExpected;
             totalPaid += paid;
@@ -2712,27 +2786,25 @@ async function generateCCPDFContent(doc, logoImg, isSingleMonth, selectedMonth) 
             }
 
             let totalDebt = 0;
-            const uidTarget = (u.id || u.username || '').toLowerCase().trim();
-            const unameTarget = (u.username || u.id || '').toLowerCase().trim();
-            const userPayments = payments.filter(p => p && (
-                (p.userId && p.userId.toLowerCase().trim() === uidTarget) ||
-                (p.userId && p.userId.toLowerCase().trim() === unameTarget) ||
-                (p.username && p.username.toLowerCase().trim() === unameTarget)
-            ));
+            const userPayments = window.getUserPayments(u, payments);
 
             const monthCells = months.map(m => {
                 const monthlyExpected = calculateExpectedForUserMonth(u, m);
-                const paid = userPayments.filter(p => p.month === m && p.status === 'approved').reduce((sum, p) => sum + p.amount, 0);
-                const isFull = paid >= monthlyExpected && monthlyExpected > 0;
-                const isPartial = paid > 0 && paid < monthlyExpected;
-                const isDebt = paid === 0 && monthlyExpected > 0;
-                const hasPending = userPayments.some(p => p.month === m && p.status === 'pending');
+                const mPayments = userPayments.filter(p => p.month === m);
+                const paid = mPayments.filter(p => p.status === 'approved').reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+                const hasApproved = mPayments.some(p => p.status === 'approved');
+                const hasPending = !hasApproved && mPayments.some(p => p.status === 'pending');
+                const isFull = hasApproved || (paid >= monthlyExpected && monthlyExpected > 0);
+                const isPartial = !hasApproved && paid > 0 && paid < monthlyExpected;
+                const isDebt = !hasApproved && !hasPending && monthlyExpected > 0 && paid === 0;
 
-                if (isDebt || isPartial) totalDebt += (monthlyExpected - paid);
+                const debtVal = (isFull || monthlyExpected === 0) ? 0 : Math.max(0, monthlyExpected - paid);
+                if (isDebt || isPartial) totalDebt += debtVal;
 
                 if (isFull) return "OK";
                 if (hasPending) return "PEND";
                 if (isDebt) return "IMPAGO";
+                if (isPartial) return "PARCIAL";
                 return "-";
             });
 

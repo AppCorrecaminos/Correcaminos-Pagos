@@ -49,6 +49,14 @@ const DataManager = {
         }, 50);
     },
 
+    _safeSetLocal(key, val) {
+        try {
+            localStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
+        } catch (e) {
+            console.warn(`[DataManager] LocalStorage quota reached for "${key}". Data remains safely cached in memory and Firestore.`);
+        }
+    },
+
     /**
      * Configuración General
      */
@@ -234,7 +242,7 @@ const DataManager = {
                 const snapshot = await window.firebase.firestore.getDocs(q);
                 const cloudPayments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                 this._cache.payments = cloudPayments;
-                localStorage.setItem('correcaminos_payments', JSON.stringify(cloudPayments));
+                this._safeSetLocal('correcaminos_payments', cloudPayments);
                 return cloudPayments;
             } catch (e) {
                 console.warn("Error leyendo pagos de nube, usando locales.", e);
@@ -260,10 +268,26 @@ const DataManager = {
         const all = await this.getPayments();
         if (!userId) return [];
         const targetId = userId.toLowerCase().trim();
-        return all.filter(p => p && (
-            (p.userId && p.userId.toLowerCase().trim() === targetId) ||
-            (p.username && p.username.toLowerCase().trim() === targetId)
-        ));
+        const user = await this.getUser(userId);
+        const uname = user ? (user.username || '').toLowerCase().trim() : '';
+        const uName = user ? (user.name || '').toLowerCase().trim() : '';
+        const athNames = (user && user.athletes ? user.athletes : []).map(a => (a.name || '').toLowerCase().trim()).filter(Boolean);
+
+        return all.filter(p => {
+            if (!p) return false;
+            const pUid = (p.userId || '').toLowerCase().trim();
+            const pUname = (p.username || '').toLowerCase().trim();
+            const pName = (p.userDisplayName || p.name || '').toLowerCase().trim();
+            const pChildren = (p.childrenNames || '').toLowerCase().trim();
+
+            if (pUid === targetId || pUname === targetId) return true;
+            if (uname && (pUid === uname || pUname === uname)) return true;
+            if (uName && (pName.includes(uName) || pUid === uName)) return true;
+            for (const ath of athNames) {
+                if (ath && (pChildren.includes(ath) || pName.includes(ath) || pUid === ath)) return true;
+            }
+            return false;
+        });
     },
 
     async addPayment(payment) {
@@ -275,7 +299,7 @@ const DataManager = {
         const local = JSON.parse(localStorage.getItem('correcaminos_payments') || '[]');
         local.push(payment);
         this._cache.payments = local;
-        localStorage.setItem('correcaminos_payments', JSON.stringify(local));
+        this._safeSetLocal('correcaminos_payments', local);
 
         if (this.db) {
             try {
@@ -293,7 +317,7 @@ const DataManager = {
         const p = local.find(x => x.id === id);
         if (p) Object.assign(p, updates);
         this._cache.payments = local;
-        localStorage.setItem('correcaminos_payments', JSON.stringify(local));
+        this._safeSetLocal('correcaminos_payments', local);
 
         if (this.db) {
             try {
@@ -310,7 +334,7 @@ const DataManager = {
         return window.firebase.firestore.onSnapshot(window.firebase.firestore.collection(this.db, "payments"), (snap) => {
             const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
             this._cache.payments = list;
-            localStorage.setItem('correcaminos_payments', JSON.stringify(list));
+            this._safeSetLocal('correcaminos_payments', list);
             cb(list);
         });
     },
@@ -649,7 +673,7 @@ const DataManager = {
                 if (snap.exists) {
                     const data = snap.data();
                     this._cache.config = data;
-                    localStorage.setItem('correcaminos_config', JSON.stringify(data));
+                    this._safeSetLocal('correcaminos_config', data);
                 }
             } else if (collectionKey === 'events') {
                 const q = window.firebase.firestore.collection(this.db, "events");
@@ -657,7 +681,7 @@ const DataManager = {
                 const cloudEvents = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 if (cloudEvents.length > 0) {
                     this._cache.events = cloudEvents;
-                    localStorage.setItem('correcaminos_events', JSON.stringify(cloudEvents));
+                    this._safeSetLocal('correcaminos_events', cloudEvents);
                 }
             } else if (collectionKey === 'rankings') {
                 const docRef = window.firebase.firestore.doc(this.db, "settings", "rankings");
@@ -667,31 +691,31 @@ const DataManager = {
                     data.clubRecords = data.clubRecords || [];
                     data.provincialMinMarks = data.provincialMinMarks || [];
                     this._cache.rankings = data;
-                    localStorage.setItem('correcaminos_rankings', JSON.stringify(data));
+                    this._safeSetLocal('correcaminos_rankings', data);
                 }
             } else if (collectionKey === 'users') {
                 const q = window.firebase.firestore.collection(this.db, "users");
                 const snap = await window.firebase.firestore.getDocs(q);
                 const cloudUsers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 this._cache.users = cloudUsers;
-                localStorage.setItem('correcaminos_users', JSON.stringify(cloudUsers));
+                this._safeSetLocal('correcaminos_users', cloudUsers);
             } else if (collectionKey === 'payments') {
                 const q = window.firebase.firestore.collection(this.db, "payments");
                 const snap = await window.firebase.firestore.getDocs(q);
                 const cloudPayments = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                 this._cache.payments = cloudPayments;
-                localStorage.setItem('correcaminos_payments', JSON.stringify(cloudPayments));
+                this._safeSetLocal('correcaminos_payments', cloudPayments);
             } else if (collectionKey === 'partners') {
                 const q = window.firebase.firestore.collection(this.db, "partners");
                 const snap = await window.firebase.firestore.getDocs(q);
                 const cloudPartners = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 this._cache.partners = cloudPartners;
-                localStorage.setItem('correcaminos_partners', JSON.stringify(cloudPartners));
+                this._safeSetLocal('correcaminos_partners', cloudPartners);
             } else if (collectionKey === 'coupons') {
                 const q = window.firebase.firestore.collection(this.db, "coupons");
                 const snap = await window.firebase.firestore.getDocs(q);
                 const cloudCoupons = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                localStorage.setItem('correcaminos_coupons', JSON.stringify(cloudCoupons));
+                this._safeSetLocal('correcaminos_coupons', cloudCoupons);
             }
         } catch (err) {
             console.warn(`Sincronización en segundo plano [${collectionKey}] diferida:`, err);

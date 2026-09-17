@@ -15,7 +15,7 @@
     <!-- Verificación y Descarte Automático de Caché Móvil -->
     <script>
       (function() {
-        const APP_VERSION = 'v5.0-20260917';
+        const APP_VERSION = 'v5.1-20260917';
         const stored = localStorage.getItem('correcaminos_client_ver');
         if (stored !== APP_VERSION) {
           console.log('[App] Nueva versión detectada (' + APP_VERSION + '). Limpiando almacenamiento temporal...');
@@ -23,7 +23,7 @@
           if ('caches' in window) {
             caches.keys().then(function(keys) {
               keys.forEach(function(k) {
-                if (k !== 'correcaminos-v5') caches.delete(k);
+                if (k !== 'correcaminos-v5.1') caches.delete(k);
               });
             });
           }
@@ -427,7 +427,7 @@
                             <p>Descuentos y beneficios exclusivos para socios al día</p>
                         </div>
                         <button type="button" onclick="window.forceRefreshApp()" class="btn-text" style="font-size:0.8rem; color:var(--text-muted); background:#f1f5f9; padding:0.4rem 0.85rem; border-radius:20px; border:1px solid var(--border); display:inline-flex; align-items:center; gap:0.4rem; cursor:pointer;" title="Forzar actualización de versión y limpiar memoria">
-                            <i class="fas fa-sync-alt"></i> Versión 5.0 • Actualizar
+                            <i class="fas fa-sync-alt"></i> Versión 5.1 • Actualizar
                         </button>
                     </header>
                     <div id="user-benefits-container" class="athletes-grid">

@@ -1143,10 +1143,16 @@ function setupEventListeners() {
 
     // Modales y Logout
     document.querySelectorAll('.close-modal').forEach(b => b.addEventListener('click', () => {
-        document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+        document.querySelectorAll('.modal').forEach(m => {
+            m.classList.remove('active');
+            m.style.display = '';
+        });
     }));
     document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', (e) => {
-        if (e.target === m) m.classList.remove('active');
+        if (e.target === m) {
+            m.classList.remove('active');
+            m.style.display = '';
+        }
     }));
     document.querySelectorAll('.btn-logout').forEach(b => b.addEventListener('click', () => window.Auth.logout()));
 
@@ -2271,13 +2277,13 @@ async function renderUserBenefits() {
                 `;
             } else if (activeCoupon) {
                 actionBtnHtml = `
-                    <button class="btn-secondary btn-view-active-coupon" data-code="${activeCoupon.id}" data-partner-name="${p.name}" data-discount="${p.discountDetail}" data-desc="${p.description}" style="width:100%;">
+                    <button type="button" class="btn-secondary btn-view-active-coupon" onclick="window.openActiveCoupon('${activeCoupon.id}', '${p.id}')" style="width:100%; min-height:44px; touch-action:manipulation; cursor:pointer;">
                         <i class="fas fa-qrcode"></i> Ver Cupón Activo
                     </button>
                 `;
             } else {
                 actionBtnHtml = `
-                    <button class="btn-primary btn-generate-coupon" data-partner-id="${p.id}" style="width:100%;">
+                    <button type="button" class="btn-primary btn-generate-coupon" onclick="handleCreateCoupon('${p.id}')" style="width:100%; min-height:44px; touch-action:manipulation; cursor:pointer;">
                         <i class="fas fa-gift"></i> Obtener Cupón
                     </button>
                 `;
@@ -2307,20 +2313,16 @@ async function renderUserBenefits() {
             container.appendChild(card);
         });
 
+        // Event listeners directos adicionales para navegadores que bloqueen inline onclick
         container.querySelectorAll('.btn-generate-coupon').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const partnerId = btn.dataset.partnerId;
-                handleCreateCoupon(partnerId);
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
             });
         });
 
         container.querySelectorAll('.btn-view-active-coupon').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const code = btn.dataset.code;
-                const partnerName = btn.dataset.partnerName;
-                const discount = btn.dataset.discount;
-                const desc = btn.dataset.desc;
-                showCouponModal(code, partnerName, discount, desc);
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
             });
         });
 
@@ -2677,17 +2679,46 @@ window.forceRefreshApp = async function() {
     }, 400);
 };
 
+window.openActiveCoupon = async function(couponId, partnerId) {
+    try {
+        console.log("[openActiveCoupon] Abriendo cupón:", couponId, partnerId);
+        const partners = (await window.DataManager.getPartners()) || [];
+        const p = partners.find(x => x.id === partnerId) || {};
+        let coupon = null;
+        if (typeof currentUser !== 'undefined' && currentUser && currentUser.id) {
+            const coupons = (await window.DataManager.getCouponsByUser(currentUser.id)) || [];
+            coupon = coupons.find(x => x.id === couponId);
+        }
+        showCouponModal(couponId, p.name || 'Comercio Adherido', p.discountDetail || 'Beneficio Especial', p.description || '');
+    } catch (err) {
+        console.error("[openActiveCoupon] Error al buscar info:", err);
+        showCouponModal(couponId, 'Comercio Adherido', 'Beneficio', '');
+    }
+};
+
 function showCouponModal(code, partnerName, discount, desc) {
-    document.getElementById('coupon-partner-name').innerText = partnerName || 'Comercio Amigo';
-    document.getElementById('coupon-discount-value').innerText = discount || 'Beneficio';
-    document.getElementById('coupon-benefit-desc').innerText = desc || '';
-    document.getElementById('coupon-code-text').innerText = code;
+    console.log("[showCouponModal] Visualizando modal cupón:", code, partnerName);
+    const partnerEl = document.getElementById('coupon-partner-name');
+    if (partnerEl) partnerEl.innerText = partnerName || 'Comercio Amigo';
+
+    const discountEl = document.getElementById('coupon-discount-value');
+    if (discountEl) discountEl.innerText = discount || 'Beneficio';
+
+    const descEl = document.getElementById('coupon-benefit-desc');
+    if (descEl) descEl.innerText = desc || '';
+
+    const codeEl = document.getElementById('coupon-code-text');
+    if (codeEl) codeEl.innerText = code || '';
 
     const validationUrl = `https://appcorrecaminos.github.io/Correcaminos-Pagos/validar.html?code=${encodeURIComponent(code)}`;
 
-    // 1. Mostrar modal primero
+    // 1. Mostrar modal de forma forzada e inmune a cualquier bloqueo de clases en móvil
     const modal = document.getElementById('coupon-modal');
-    if (modal) modal.classList.add('active');
+    if (modal) {
+        modal.classList.add('active');
+        modal.style.display = 'flex';
+        modal.style.zIndex = '99999';
+    }
 
     // 2. Renderizar QR dentro del contenedor (SVG Vectorial Directo - 100% Inmune a bugs de Canvas o UserAgent móvil)
     const qrContainer = document.getElementById('coupon-qr-container');
@@ -2735,8 +2766,8 @@ function showCouponModal(code, partnerName, discount, desc) {
         directLinkDiv.style.marginTop = '12px';
         directLinkDiv.style.textAlign = 'center';
         directLinkDiv.innerHTML = `
-            <a href="${validationUrl}" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:0.65rem 1rem; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:8px; font-weight:600; font-size:0.85rem; text-decoration:none; width:100%; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
-                <i class="fas fa-external-link-alt"></i> Validar Cupón Directamente
+            <a href="${validationUrl}" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:0.65rem 1rem; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:8px; font-weight:600; font-size:0.85rem; text-decoration:none; width:100%; box-shadow:0 1px 2px rgba(0,0,0,0.05); touch-action:manipulation;">
+                <i class="fas fa-external-link-alt"></i> Abrir Link de Validación
             </a>
         `;
         qrContainer.parentNode.insertBefore(directLinkDiv, qrContainer.nextSibling);

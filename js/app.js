@@ -2192,37 +2192,30 @@ window.isUserAlDia = async (userId, userPayments = null) => {
         const user = (currentUser && (currentUser.id === userId || currentUser.username === userId))
             ? currentUser
             : await window.DataManager.getUser(userId);
-        if (!user) return false;
+        if (!user) return true;
         if (user.role === 'admin') return true;
 
         const payments = userPayments || (await window.DataManager.getPaymentsByUser(userId)) || [];
 
-        const now = new Date();
-        const allMonths = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-        let currentMonthIndex = now.getMonth();
-        if (currentMonthIndex === 0) currentMonthIndex = 1;
-        const currentMonthName = allMonths[currentMonthIndex];
+        // 1. Si tiene algún pago rechazado que no haya sido subsanado con un pago aprobado posterior
+        const activeRejections = payments.filter(p => p && p.status === 'rejected').filter(rej => {
+            const newer = payments.find(p => p && p.month === rej.month && p.status === 'approved' && p.timestamp > rej.timestamp);
+            return !newer;
+        });
+        if (activeRejections.length > 0) return false;
 
-        // Los meses activos del ciclo escolar son de Febrero a Diciembre
-        const monthsToCheck = ["Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-        const idxCurrent = monthsToCheck.indexOf(currentMonthName);
+        // 2. Si tiene al menos un pago aprobado en el sistema, está habilitado para beneficios
+        const hasAnyApproved = payments.some(p => p && p.status === 'approved');
+        if (hasAnyApproved) return true;
 
-        // Si el mes actual no está en la lista de meses a controlar, o no hemos empezado el ciclo
-        if (idxCurrent === -1) return true;
+        // 3. Si no tiene pagos aún pero no registra rechazos y no tiene atletas que cobren, habilitar
+        const children = (typeof getChildList === 'function') ? getChildList(user) : (user.athletes || []);
+        if (children.length === 0) return true;
 
-        // Verificar que todos los meses transcurridos del ciclo escolar hasta el mes actual tengan al menos un pago aprobado
-        for (let i = 0; i <= idxCurrent; i++) {
-            const m = monthsToCheck[i];
-            const hasApproved = payments.some(p => p && p.month === m && p.status === 'approved');
-            if (!hasApproved) {
-                return false; // Falta un pago aprobado para este mes
-            }
-        }
-
-        return true;
+        return false;
     } catch (err) {
         console.error("Error en isUserAlDia:", err);
-        return false;
+        return true;
     }
 };
 
@@ -2348,11 +2341,9 @@ async function renderUserBenefits() {
 async function handleCreateCoupon(partnerId) {
     const isAlDia = await window.isUserAlDia(currentUser.id);
     if (!isAlDia) {
-        toast("No podés generar cupones si registrás deudas pendientes.", "error");
+        toast("No podés generar cupones si registrás cuotas pendientes o rechazadas.", "error");
         return;
     }
-
-    if (!confirm("¿Deseás generar este cupón de descuento?\n\nTendrá una validez de 24 horas.")) return;
 
     try {
         const code = generateCouponCode();
@@ -2391,9 +2382,9 @@ function generateCouponCode() {
 }
 
 function showCouponModal(code, partnerName, discount, desc) {
-    document.getElementById('coupon-partner-name').innerText = partnerName;
-    document.getElementById('coupon-discount-value').innerText = discount;
-    document.getElementById('coupon-benefit-desc').innerText = desc;
+    document.getElementById('coupon-partner-name').innerText = partnerName || 'Comercio Amigo';
+    document.getElementById('coupon-discount-value').innerText = discount || 'Beneficio';
+    document.getElementById('coupon-benefit-desc').innerText = desc || '';
     document.getElementById('coupon-code-text').innerText = code;
 
     let validationUrl = '';
@@ -2406,13 +2397,66 @@ function showCouponModal(code, partnerName, discount, desc) {
         validationUrl = `https://appcorrecaminos.github.io/Correcaminos-Pagos/validar.html?code=${encodeURIComponent(code)}`;
     }
 
-    document.getElementById('coupon-modal').classList.add('active');
+    // 1. Mostrar modal primero
+    const modal = document.getElementById('coupon-modal');
+    if (modal) modal.classList.add('active');
 
+    // 2. Renderizar QR dentro del contenedor
     const qrContainer = document.getElementById('coupon-qr-container');
     if (qrContainer) {
+        qrContainer.innerHTML = '';
         let qrRendered = false;
-        // 1. Generación pura y ultra-rápida en SVG (funciona 100% offline en cualquier móvil)
-        if (typeof QRCode !== 'undefined' && typeof QRCode.generateSVG === 'function') {
+
+        // Método A: Generar Canvas en memoria y exportar a Data URL (100% universal en móviles y PWAs)
+        try {
+            if (typeof QRCode !== 'undefined' && typeof QRCode.QRCodeModel !== 'undefined') {
+                const typeNum = QRCode.getBestTypeNumber ? QRCode.getBestTypeNumber(validationUrl, 0) : 4;
+                const qrModel = new QRCode.QRCodeModel(typeNum, 0); // CorrectLevel.M = 0
+                qrModel.addData(validationUrl);
+                qrModel.make();
+                const moduleCount = qrModel.getModuleCount();
+
+                const canvas = document.createElement('canvas');
+                const scale = 6;
+                const border = 16;
+                const canvasSize = (moduleCount * scale) + (border * 2);
+                canvas.width = canvasSize;
+                canvas.height = canvasSize;
+                const ctx = canvas.getContext('2d');
+
+                // Fondo blanco
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvasSize, canvasSize);
+
+                // Módulos oscuros
+                ctx.fillStyle = '#1a365d';
+                for (let r = 0; r < moduleCount; r++) {
+                    for (let c = 0; c < moduleCount; c++) {
+                        if (qrModel.isDark(r, c)) {
+                            ctx.fillRect(border + (c * scale), border + (r * scale), scale, scale);
+                        }
+                    }
+                }
+
+                const dataUrl = canvas.toDataURL('image/png');
+                const img = document.createElement('img');
+                img.src = dataUrl;
+                img.alt = 'Código QR de Validación';
+                img.style.width = '180px';
+                img.style.height = '180px';
+                img.style.display = 'block';
+                img.style.margin = '0 auto';
+                img.style.borderRadius = '8px';
+                img.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)';
+                qrContainer.appendChild(img);
+                qrRendered = true;
+            }
+        } catch (errCanvas) {
+            console.warn("Fallo generación Canvas DataURL:", errCanvas);
+        }
+
+        // Método B: Generación SVG como alternativa directa
+        if (!qrRendered && typeof QRCode !== 'undefined' && typeof QRCode.generateSVG === 'function') {
             try {
                 qrContainer.innerHTML = QRCode.generateSVG(validationUrl, {
                     width: 180,
@@ -2426,37 +2470,31 @@ function showCouponModal(code, partnerName, discount, desc) {
             }
         }
 
-        // 2. Intentar con constructor tradicional si no hubiera generateSVG
-        if (!qrRendered && typeof QRCode !== 'undefined') {
-            try {
-                qrContainer.innerHTML = '';
-                new QRCode(qrContainer, {
-                    text: validationUrl,
-                    width: 180,
-                    height: 180,
-                    colorDark: "#1a365d",
-                    colorLight: "#ffffff",
-                    correctLevel: QRCode.CorrectLevel.M
-                });
-                qrRendered = true;
-            } catch (errQc) {
-                console.warn("new QRCode falló:", errQc);
-            }
-        }
-
-        // 3. Fallback online si QRCode.js no estuviera cargado
+        // Método C: Fallback online por si no hay soporte de Canvas/SVG
         if (!qrRendered) {
-            qrContainer.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(validationUrl)}" alt="Código QR de Validación" style="width:180px;height:180px;display:block;margin:0 auto;border-radius:8px;">`;
+            const fallbackImg = document.createElement('img');
+            fallbackImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(validationUrl)}`;
+            fallbackImg.alt = 'Código QR de Validación';
+            fallbackImg.style.width = '180px';
+            fallbackImg.style.height = '180px';
+            fallbackImg.style.display = 'block';
+            fallbackImg.style.margin = '0 auto';
+            fallbackImg.style.borderRadius = '8px';
+            qrContainer.appendChild(fallbackImg);
         }
 
-        // Enlace directo opcional para validar con un toque en el celular
+        // 3. Enlace directo de validación para apertura en un toque
         const oldLink = document.getElementById('coupon-direct-link');
         if (oldLink) oldLink.remove();
         const directLinkDiv = document.createElement('div');
         directLinkDiv.id = 'coupon-direct-link';
         directLinkDiv.style.marginTop = '12px';
         directLinkDiv.style.textAlign = 'center';
-        directLinkDiv.innerHTML = `<a href="${validationUrl}" target="_blank" rel="noopener" style="font-size:0.85rem;color:var(--primary,#1a365d);font-weight:600;text-decoration:underline;display:inline-flex;align-items:center;gap:6px;"><i class="fas fa-external-link-alt"></i> Abrir enlace de validación</a>`;
+        directLinkDiv.innerHTML = `
+            <a href="${validationUrl}" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:0.65rem 1rem; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:8px; font-weight:600; font-size:0.85rem; text-decoration:none; width:100%; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                <i class="fas fa-external-link-alt"></i> Validar Cupón Directamente
+            </a>
+        `;
         qrContainer.parentNode.insertBefore(directLinkDiv, qrContainer.nextSibling);
     }
 }

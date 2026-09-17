@@ -1,4 +1,4 @@
-const CACHE_NAME = 'correcaminos-v2';
+const CACHE_NAME = 'correcaminos-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -10,7 +10,7 @@ const ASSETS_TO_CACHE = [
   './js/data.js',
   './js/firebase-config.js',
   './js/qrcode.min.js',
-  './img/Nuevo Logo Correcaminos.jpeg',
+  './img/Nuevo%20Logo%20Correcaminos.jpeg',
   './img/icons/favicon.ico',
   './img/icons/icon-192.png',
   './img/icons/icon-512.png',
@@ -24,12 +24,16 @@ const ASSETS_TO_CACHE = [
   'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js'
 ];
 
-// Evento de Instalación: Se descargan y cachean todos los recursos estáticos
+// Evento de Instalación: Se descargan y cachean los recursos estáticos de forma resiliente
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Service Worker] Guardando archivos en caché estática...');
-      return cache.addAll(ASSETS_TO_CACHE);
+      console.log('[Service Worker] Guardando archivos en caché v3...');
+      return Promise.all(
+        ASSETS_TO_CACHE.map((url) => 
+          cache.add(url).catch((err) => console.warn('[Service Worker] Aviso al cachear:', url, err))
+        )
+      );
     })
   );
   self.skipWaiting();

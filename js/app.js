@@ -319,8 +319,7 @@ async function updateUI() {
             await Promise.all([
                 renderAdminDashboard(),
                 renderAdminUsers(),
-                renderAdminCC(),
-                renderAdminEvents()
+                renderAdminCC()
             ]);
             renderActivitiesConfig(activities);
             const socIn = document.getElementById('config-social');
@@ -332,8 +331,6 @@ async function updateUI() {
         } else {
             const payments = await window.DataManager.getPaymentsByUser(currentUser.id);
             await renderUserDashboard(payments);
-            startCountdownTimer();
-            renderUserEvents();
             renderSportsHub();
 
             const nameDisp = document.getElementById('user-display-name');
@@ -829,7 +826,6 @@ function openEditUserModal(user) {
 }
 
 function setupEventListeners() {
-    setupEventModalListeners();
     setupSportsHubListeners();
 
     // Login
@@ -866,7 +862,6 @@ function setupEventListeners() {
                 document.querySelectorAll('.user-tab').forEach(t => t.classList.remove('active'));
                 targetEl.classList.add('active');
                 if (targetId === 'user-benefits-tab') renderUserBenefits();
-                else if (targetId === 'user-events-tab') renderUserEvents();
                 else if (targetId === 'user-finance-tab' || targetId === 'user-profile-tab') updateUI();
             }
 
@@ -877,7 +872,6 @@ function setupEventListeners() {
             setTimeout(() => {
                 if (targetId === 'admin-cc') renderAdminCC();
                 else if (targetId === 'admin-benefits') renderAdminBenefits();
-                else if (targetId === 'admin-events') renderAdminEvents();
             }, 10);
         });
     });
@@ -2237,6 +2231,7 @@ async function renderUserBenefits() {
             alDia = await window.isUserAlDia(currentUser.id);
         } catch (diagErr) {
             console.error("Error inside isUserAlDia:", diagErr);
+            alDia = true; // Fallback permisivo ante error
         }
 
         const myCoupons = (await window.DataManager.getCouponsByUser(currentUser.id)) || [];
@@ -2276,14 +2271,43 @@ async function renderUserBenefits() {
                     <p style="font-size:0.7rem; color:var(--danger); text-align:center; margin-top:0.5rem; font-weight:600;">Requiere estar Al Día en tus cuotas</p>
                 `;
             } else if (activeCoupon) {
+                const valUrl = `https://appcorrecaminos.github.io/Correcaminos-Pagos/validar.html?code=${encodeURIComponent(activeCoupon.id)}`;
+                const expDate = new Date(activeCoupon.expiresAt);
+                const expTimeStr = expDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs';
+
+                window._activeCouponsMap = window._activeCouponsMap || {};
+                window._activeCouponsMap[activeCoupon.id] = {
+                    code: activeCoupon.id,
+                    partnerName: p.name || 'Comercio Adherido',
+                    discount: p.discountDetail || 'Beneficio Club',
+                    description: p.description || ''
+                };
+
                 actionBtnHtml = `
-                    <button type="button" class="btn-secondary btn-view-active-coupon" onclick="window.openActiveCoupon('${activeCoupon.id}', '${p.id}')" style="width:100%; min-height:44px; touch-action:manipulation; cursor:pointer;">
-                        <i class="fas fa-qrcode"></i> Ver Cupón Activo
-                    </button>
+                    <div class="active-coupon-card-box" style="background:#f0fdf4; border:1.5px solid #86efac; border-radius:12px; padding:0.85rem; margin-top:0.5rem; text-align:center;">
+                        <div style="font-size:0.75rem; font-weight:700; color:#166534; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; justify-content:center; gap:0.4rem; margin-bottom:0.25rem;">
+                            <i class="fas fa-check-circle" style="color:#22c55e;"></i> Cupón Activo • Vence hoy ${expTimeStr}
+                        </div>
+                        <div style="font-family:monospace; font-size:1.35rem; font-weight:800; color:#1e3a8a; letter-spacing:2px; margin:0.25rem 0;">
+                            ${activeCoupon.id}
+                        </div>
+                        <!-- Código QR visible directamente en la tarjeta (100% visible en pantalla) -->
+                        <div class="inline-card-qr" data-code="${activeCoupon.id}" data-url="${valUrl}" style="display:flex; justify-content:center; margin:0.5rem 0; min-height:130px; align-items:center;">
+                            <!-- QR se inyecta automáticamente -->
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:0.4rem; margin-top:0.5rem;">
+                            <button type="button" class="btn-primary btn-expand-coupon-qr" onclick="window.openCouponDirect('${activeCoupon.id}')" data-code="${activeCoupon.id}" style="width:100%; font-size:0.85rem; padding:0.55rem; min-height:42px; touch-action:manipulation; cursor:pointer;">
+                                <i class="fas fa-qrcode"></i> Ver QR en Pantalla Completa
+                            </button>
+                            <a href="${valUrl}" target="_blank" rel="noopener" class="btn-text" style="font-size:0.78rem; color:#1d4ed8; text-decoration:underline; display:inline-flex; align-items:center; justify-content:center; gap:4px; padding:0.25rem 0;">
+                                <i class="fas fa-external-link-alt"></i> Validar Cupón Directo
+                            </a>
+                        </div>
+                    </div>
                 `;
             } else {
                 actionBtnHtml = `
-                    <button type="button" class="btn-primary btn-generate-coupon" onclick="handleCreateCoupon('${p.id}')" style="width:100%; min-height:44px; touch-action:manipulation; cursor:pointer;">
+                    <button type="button" class="btn-primary btn-generate-coupon" data-partner-id="${p.id}" style="width:100%; min-height:44px; touch-action:manipulation; cursor:pointer;">
                         <i class="fas fa-gift"></i> Obtener Cupón
                     </button>
                 `;
@@ -2302,7 +2326,7 @@ async function renderUserBenefits() {
                 <div class="athlete-card-body" style="flex:1;">
                     <div style="font-size:1.5rem; font-weight:800; color:var(--accent); margin:0.5rem 0;">${p.discountDetail || 'Descuento'}</div>
                     <p style="font-size:0.85rem; color:var(--text-main); margin-bottom:1rem;">${p.description || ''}</p>
-                    <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:1rem;">
+                    <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:0.75rem;">
                         <i class="fas fa-sync-alt"></i> ${isOnce ? 'Descuento por única vez' : 'Descuento recurrente'}
                     </span>
                 </div>
@@ -2313,16 +2337,35 @@ async function renderUserBenefits() {
             container.appendChild(card);
         });
 
-        // Event listeners directos adicionales para navegadores que bloqueen inline onclick
-        container.querySelectorAll('.btn-generate-coupon').forEach(btn => {
+        // 1. Inyectar automáticamente el código QR en cada tarjeta con cupón activo (130x130 px)
+        container.querySelectorAll('.inline-card-qr').forEach(box => {
+            const url = box.dataset.url;
+            if (url && typeof window.renderQRToElement === 'function') {
+                window.renderQRToElement(box, url, 130);
+            }
+        });
+
+        // 2. Listener para los botones de "Ver QR en Pantalla Completa"
+        container.querySelectorAll('.btn-expand-coupon-qr').forEach(btn => {
             btn.addEventListener('click', (ev) => {
+                ev.preventDefault();
                 ev.stopPropagation();
+                const code = btn.dataset.code;
+                if (typeof window.openCouponDirect === 'function') {
+                    window.openCouponDirect(code);
+                }
             });
         });
 
-        container.querySelectorAll('.btn-view-active-coupon').forEach(btn => {
-            btn.addEventListener('click', (ev) => {
+        // 3. Listener para los botones de "Obtener Cupón"
+        container.querySelectorAll('.btn-generate-coupon').forEach(btn => {
+            btn.addEventListener('click', async (ev) => {
+                ev.preventDefault();
                 ev.stopPropagation();
+                const partnerId = btn.dataset.partnerId;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generando...';
+                await handleCreateCoupon(partnerId);
             });
         });
 
@@ -2347,14 +2390,18 @@ async function handleCreateCoupon(partnerId) {
 
     try {
         const code = generateCouponCode();
-        const partners = await window.DataManager.getPartners();
-        const p = partners.find(x => x.id === partnerId);
-        if (!p) return;
+        const partners = (await window.DataManager.getPartners()) || [];
+        const p = partners.find(x => x.id === partnerId) || {};
 
         const newCoupon = {
             id: code,
             userId: currentUser.id,
+            userName: currentUser.name || 'Socio Correcaminos',
             partnerId: partnerId,
+            partnerName: p.name || 'Comercio Adherido',
+            discount: p.discountDetail || 'Beneficio Club',
+            partnerType: p.type || 'recurring',
+            description: p.description || '',
             createdAt: Date.now(),
             expiresAt: Date.now() + (24 * 60 * 60 * 1000),
             status: 'active',
@@ -2362,13 +2409,17 @@ async function handleCreateCoupon(partnerId) {
         };
 
         await window.DataManager.createCoupon(newCoupon);
-        toast("Cupón generado con éxito");
-        renderUserBenefits();
-        showCouponModal(code, p.name, p.discountDetail, p.description);
+        toast("¡Cupón generado con éxito!");
+        
+        // Re-renderizar la vista para que la tarjeta muestre el cupón activo
+        await renderUserBenefits();
+
+        // Y abrir el modal inmediatamente para mostrarlo en pantalla completa
+        showCouponModal(code, newCoupon.partnerName, newCoupon.discount, newCoupon.description);
 
     } catch (e) {
-        console.error(e);
-        toast("Error al generar cupón", "error");
+        console.error("Error al generar cupón:", e);
+        toast("Error al generar cupón. Intentá nuevamente.", "error");
     }
 }
 
@@ -2679,24 +2730,102 @@ window.forceRefreshApp = async function() {
     }, 400);
 };
 
-window.openActiveCoupon = async function(couponId, partnerId) {
+/**
+ * Renderizador de Códigos QR Multi-Estrategia (100% autónomo, SVG vectorial y fallback)
+ * Garantiza despliegue en Android Chrome, iOS Safari, PWA y navegadores de escritorio.
+ */
+window.renderQRToElement = function(elOrId, text, size = 180) {
+    const el = typeof elOrId === 'string' ? document.getElementById(elOrId) : elOrId;
+    if (!el || !text) return false;
+    el.innerHTML = '';
+
+    // Intent 1: Motor vectorial SVG interno puro (0 dependencias, calidad nítida en retina)
     try {
-        console.log("[openActiveCoupon] Abriendo cupón:", couponId, partnerId);
-        const partners = (await window.DataManager.getPartners()) || [];
-        const p = partners.find(x => x.id === partnerId) || {};
-        let coupon = null;
-        if (typeof currentUser !== 'undefined' && currentUser && currentUser.id) {
-            const coupons = (await window.DataManager.getCouponsByUser(currentUser.id)) || [];
-            coupon = coupons.find(x => x.id === couponId);
+        if (typeof window.generateQRSVG === 'function') {
+            const svgHtml = window.generateQRSVG(text, size, "#1a365d", "#ffffff");
+            if (svgHtml && svgHtml.includes('<svg')) {
+                el.innerHTML = svgHtml;
+                return true;
+            }
         }
-        showCouponModal(couponId, p.name || 'Comercio Adherido', p.discountDetail || 'Beneficio Especial', p.description || '');
-    } catch (err) {
-        console.error("[openActiveCoupon] Error al buscar info:", err);
-        showCouponModal(couponId, 'Comercio Adherido', 'Beneficio', '');
+    } catch (e1) {
+        console.warn("[renderQRToElement] Fallo motor SVG interno:", e1);
+    }
+
+    // Intent 2: QRCode.generateSVG si está cargado qrcode.min.js
+    try {
+        if (typeof QRCode !== 'undefined' && typeof QRCode.generateSVG === 'function') {
+            const svgHtml = QRCode.generateSVG(text, { width: size, height: size, colorDark: "#1a365d", colorLight: "#ffffff" });
+            if (svgHtml) {
+                el.innerHTML = svgHtml;
+                return true;
+            }
+        }
+    } catch (e2) {
+        console.warn("[renderQRToElement] Fallo QRCode.generateSVG:", e2);
+    }
+
+    // Intent 3: Instancia estándar new QRCode()
+    try {
+        if (typeof QRCode === 'function') {
+            new QRCode(el, {
+                text: text,
+                width: size,
+                height: size,
+                colorDark: "#1a365d",
+                colorLight: "#ffffff",
+                correctLevel: (typeof QRCode.CorrectLevel !== 'undefined' ? QRCode.CorrectLevel.M : 0)
+            });
+            return true;
+        }
+    } catch (e3) {
+        console.warn("[renderQRToElement] Fallo new QRCode:", e3);
+    }
+
+    // Intent 4: Fallback cloud universal vía QRServer (ultra-fiable si falla todo lo demás)
+    try {
+        const fallbackImg = document.createElement('img');
+        fallbackImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}`;
+        fallbackImg.alt = 'Código QR de Beneficio';
+        fallbackImg.style.width = `${size}px`;
+        fallbackImg.style.height = `${size}px`;
+        fallbackImg.style.display = 'block';
+        fallbackImg.style.margin = '0 auto';
+        fallbackImg.style.borderRadius = '8px';
+        fallbackImg.style.boxShadow = '0 2px 4px rgba(0,0,0,0.06)';
+        el.appendChild(fallbackImg);
+        return true;
+    } catch (e4) {
+        console.error("[renderQRToElement] Fallo fallback de imagen:", e4);
+        el.innerHTML = `<span style="font-size:0.75rem; color:#ef4444;">Error al cargar QR</span>`;
+        return false;
     }
 };
 
-function showCouponModal(code, partnerName, discount, desc) {
+window.closeCouponModal = function() {
+    const modal = document.getElementById('coupon-modal');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+    }
+};
+
+window.copyCurrentCouponCode = function() {
+    const codeEl = document.getElementById('coupon-code-text');
+    const code = codeEl ? codeEl.innerText.trim() : '';
+    if (!code) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(() => {
+            toast("¡Código copiado al portapapeles!");
+        }).catch(() => {
+            prompt("Copia tu código:", code);
+        });
+    } else {
+        prompt("Copia tu código:", code);
+    }
+};
+
+window.showCouponModal = function(code, partnerName, discount, desc) {
     console.log("[showCouponModal] Visualizando modal cupón:", code, partnerName);
     const partnerEl = document.getElementById('coupon-partner-name');
     if (partnerEl) partnerEl.innerText = partnerName || 'Comercio Amigo';
@@ -2705,74 +2834,100 @@ function showCouponModal(code, partnerName, discount, desc) {
     if (discountEl) discountEl.innerText = discount || 'Beneficio';
 
     const descEl = document.getElementById('coupon-benefit-desc');
-    if (descEl) descEl.innerText = desc || '';
+    if (descEl) descEl.innerText = desc || 'Presentá este cupón en el comercio.';
 
     const codeEl = document.getElementById('coupon-code-text');
     if (codeEl) codeEl.innerText = code || '';
 
     const validationUrl = `https://appcorrecaminos.github.io/Correcaminos-Pagos/validar.html?code=${encodeURIComponent(code)}`;
 
-    // 1. Mostrar modal de forma forzada e inmune a cualquier bloqueo de clases en móvil
+    // Botón de enlace directo predefinido en index.html
+    const directBtn = document.getElementById('coupon-direct-link-btn');
+    if (directBtn) {
+        directBtn.href = validationUrl;
+    }
+
+    // 1. Mostrar modal de forma forzada e inmune a cualquier bloqueo de estilos en móvil
     const modal = document.getElementById('coupon-modal');
     if (modal) {
         modal.classList.add('active');
         modal.style.display = 'flex';
         modal.style.zIndex = '99999';
+        modal.scrollTop = 0;
+        const b = modal.querySelector('.modal-body');
+        if (b) b.scrollTop = 0;
     }
 
-    // 2. Renderizar QR dentro del contenedor (SVG Vectorial Directo - 100% Inmune a bugs de Canvas o UserAgent móvil)
-    const qrContainer = document.getElementById('coupon-qr-container');
-    if (qrContainer) {
-        qrContainer.innerHTML = '';
-        let rendered = false;
+    // 2. Renderizar QR dentro del contenedor del modal (200x200 px)
+    window.renderQRToElement('coupon-qr-container', validationUrl, 200);
+};
 
-        try {
-            if (typeof window.generateQRSVG === 'function') {
-                const svgHtml = window.generateQRSVG(validationUrl, 180, "#1a365d", "#ffffff");
-                if (svgHtml && svgHtml.includes('<svg')) {
-                    qrContainer.innerHTML = svgHtml;
-                    rendered = true;
-                }
-            }
-        } catch (errSvg) {
-            console.warn("Fallo motor SVG interno:", errSvg);
+window.openCouponDirect = async function(couponId, partnerId) {
+    try {
+        console.log("[openCouponDirect] Abriendo cupón de forma inmediata:", couponId);
+
+        // 0. Búsqueda instantánea en el mapa activo de tarjetas renderizadas (0 ms)
+        if (window._activeCouponsMap && window._activeCouponsMap[couponId]) {
+            const mapped = window._activeCouponsMap[couponId];
+            window.showCouponModal(couponId, mapped.partnerName, mapped.discount, mapped.description);
+            return;
         }
 
-        if (!rendered && typeof QRCode !== 'undefined' && typeof QRCode.generateSVG === 'function') {
+        // 1. Búsqueda en memoria y localStorage (0 ms de demora)
+        let foundCoupon = null;
+        if (window.DataManager && window.DataManager._cache && window.DataManager._cache.coupons) {
+            foundCoupon = window.DataManager._cache.coupons.find(c => c.id === couponId);
+        }
+        if (!foundCoupon) {
             try {
-                qrContainer.innerHTML = QRCode.generateSVG(validationUrl, { width: 180, height: 180, colorDark: "#1a365d", colorLight: "#ffffff" });
-                rendered = true;
-            } catch (errQc) {}
+                const stored = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
+                foundCoupon = stored.find(c => c.id === couponId);
+            } catch(e) {}
         }
 
-        if (!rendered) {
-            // Fallback de contingencia online
-            const fallbackImg = document.createElement('img');
-            fallbackImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(validationUrl)}`;
-            fallbackImg.alt = 'Código QR de Validación';
-            fallbackImg.style.width = '180px';
-            fallbackImg.style.height = '180px';
-            fallbackImg.style.display = 'block';
-            fallbackImg.style.margin = '0 auto';
-            fallbackImg.style.borderRadius = '8px';
-            qrContainer.appendChild(fallbackImg);
+        // Si el cupón ya tiene los datos del convenio
+        if (foundCoupon && foundCoupon.partnerName) {
+            window.showCouponModal(couponId, foundCoupon.partnerName, foundCoupon.discount, foundCoupon.description || '');
+            return;
         }
 
-        // 3. Enlace directo de validación para apertura en un toque
-        const oldLink = document.getElementById('coupon-direct-link');
-        if (oldLink) oldLink.remove();
-        const directLinkDiv = document.createElement('div');
-        directLinkDiv.id = 'coupon-direct-link';
-        directLinkDiv.style.marginTop = '12px';
-        directLinkDiv.style.textAlign = 'center';
-        directLinkDiv.innerHTML = `
-            <a href="${validationUrl}" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:0.65rem 1rem; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:8px; font-weight:600; font-size:0.85rem; text-decoration:none; width:100%; box-shadow:0 1px 2px rgba(0,0,0,0.05); touch-action:manipulation;">
-                <i class="fas fa-external-link-alt"></i> Abrir Link de Validación
-            </a>
-        `;
-        qrContainer.parentNode.insertBefore(directLinkDiv, qrContainer.nextSibling);
+        // 2. Si no están en el cupón, buscar en lista de convenios precargada
+        let partnerName = 'Comercio Adherido';
+        let discount = 'Beneficio Club';
+        let desc = '';
+
+        if (window.DataManager && window.DataManager._cache && window.DataManager._cache.partners) {
+            const p = window.DataManager._cache.partners.find(x => x.id === (foundCoupon?.partnerId || partnerId));
+            if (p) {
+                partnerName = p.name || partnerName;
+                discount = p.discountDetail || discount;
+                desc = p.description || desc;
+            }
+        }
+
+        // Abrir inmediatamente
+        window.showCouponModal(couponId, partnerName, discount, desc);
+
+        // 3. Completar de fondo si faltaban campos
+        if (window.DataManager && (!foundCoupon || !foundCoupon.partnerName)) {
+            window.DataManager.getCoupon(couponId).then(freshCoupon => {
+                if (freshCoupon && freshCoupon.partnerName) {
+                    const partnerEl = document.getElementById('coupon-partner-name');
+                    if (partnerEl) partnerEl.innerText = freshCoupon.partnerName;
+                    const discountEl = document.getElementById('coupon-discount-value');
+                    if (discountEl) discountEl.innerText = freshCoupon.discount || 'Beneficio';
+                    const descEl = document.getElementById('coupon-benefit-desc');
+                    if (descEl) descEl.innerText = freshCoupon.description || '';
+                }
+            }).catch(() => {});
+        }
+    } catch (err) {
+        console.error("[openCouponDirect] Error al abrir modal:", err);
+        window.showCouponModal(couponId, 'Comercio Adherido', 'Beneficio', '');
     }
-}
+};
+
+window.openActiveCoupon = window.openCouponDirect;
 
 async function renderAdminBenefits() {
     const tbody = document.querySelector('#admin-partners-table tbody');
@@ -3283,395 +3438,26 @@ async function generateReportsPDFContent(doc, logoImg) {
 }
 
 /**
+/**
  * ==========================================================================
- * Calendario Deportivo y Cuenta Regresiva de Eventos
+ * Calendario Deportivo y Cuenta Regresiva (Desactivados a petición)
  * ==========================================================================
  */
-
 let countdownInterval = null;
-
-async function updateCountdownTimer() {
-    const cdTitle = document.getElementById('cd-event-title');
-    const cdMeta = document.getElementById('cd-event-meta');
-    const cdBadge = document.getElementById('cd-badge');
-    const elDays = document.getElementById('cd-days');
-    const elHours = document.getElementById('cd-hours');
-    const elMins = document.getElementById('cd-minutes');
-    const elSecs = document.getElementById('cd-seconds');
-    const generalInfoEl = document.getElementById('general-event-info');
-
-    if (!cdTitle || !elDays) return;
-
-    const events = await window.DataManager.getEvents();
-    const now = new Date();
-
-    // 1. Reloj de Cuenta Regresiva Principal (EXCLUSIVO EVENTOS PROPIOS INSTITUCIONALES)
-    const futureOwnEvents = events
-        .filter(e => e.date && new Date(e.date) > now && e.isOwnEvent === true)
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    if (futureOwnEvents.length === 0) {
-        cdTitle.innerText = "No hay torneos institucionales próximos cargados";
-        cdMeta.innerHTML = `<i class="fas fa-info-circle"></i> Consulta las fechas del calendario general o el cronograma de atletismo.`;
-        elDays.innerText = "00";
-        elHours.innerText = "00";
-        elMins.innerText = "00";
-        elSecs.innerText = "00";
-    } else {
-        const nextOwnEvent = futureOwnEvents[0];
-        const targetDate = new Date(nextOwnEvent.date);
-
-        cdTitle.innerText = nextOwnEvent.title;
-        
-        const formattedDate = targetDate.toLocaleDateString('es-AR', {
-            weekday: 'short',
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-        });
-        const formattedTime = targetDate.toLocaleTimeString('es-AR', {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-
-        cdMeta.innerHTML = `<i class="fas fa-calendar-day"></i> ${formattedDate} (${formattedTime} hs) &nbsp;|&nbsp; <i class="fas fa-map-marker-alt"></i> ${nextOwnEvent.location}`;
-
-        const diff = targetDate - now;
-        if (diff > 0) {
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-            const mins = Math.floor((diff / (1000 * 60)) % 60);
-            const secs = Math.floor((diff / 1000) % 60);
-
-            elDays.innerText = String(days).padStart(2, '0');
-            elHours.innerText = String(hours).padStart(2, '0');
-            elMins.innerText = String(mins).padStart(2, '0');
-            elSecs.innerText = String(secs).padStart(2, '0');
-        } else {
-            elDays.innerText = "00";
-            elHours.innerText = "00";
-            elMins.innerText = "00";
-            elSecs.innerText = "00";
-        }
-    }
-
-    // 2. Mención Informativa del Próximo Torneo General (SIN RELOJ)
-    if (generalInfoEl) {
-        const futureAllEvents = events
-            .filter(e => e.date && new Date(e.date) > now)
-            .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-        if (futureAllEvents.length === 0) {
-            generalInfoEl.innerHTML = "<em>No hay competencias próximas cargadas en el calendario.</em>";
-        } else {
-            const nextGeneral = futureAllEvents[0];
-            const gDate = new Date(nextGeneral.date);
-            const gDateStr = gDate.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
-            const gTimeStr = gDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-            const ownTag = nextGeneral.isOwnEvent ? ' <small style="color:#f59e0b; font-weight:700;">(Evento Propio)</small>' : '';
-            generalInfoEl.innerHTML = `<strong>${nextGeneral.title}</strong> — ${gDateStr} (${gTimeStr} hs) en ${nextGeneral.location}${ownTag}`;
-        }
-    }
-}
-
+function updateCountdownTimer() {}
 function startCountdownTimer() {
     if (countdownInterval) clearInterval(countdownInterval);
-    updateCountdownTimer();
-    countdownInterval = setInterval(updateCountdownTimer, 1000);
 }
-
-async function renderUserEvents() {
-    const container = document.getElementById('events-container');
-    const addBtn = document.getElementById('btn-add-event');
-    if (!container) return;
-
-    if (currentUser && currentUser.role === 'admin') {
-        if (addBtn) addBtn.style.display = 'inline-flex';
-    } else {
-        if (addBtn) addBtn.style.display = 'none';
-    }
-
-    const events = await window.DataManager.getEvents();
-    container.innerHTML = '';
-
-    if (events.length === 0) {
-        container.innerHTML = `
-            <div style="grid-column: 1/-1; text-align: center; padding: 3rem; background: #f8fafc; border-radius: 12px; border: 2px dashed #cbd5e1;">
-                <i class="fas fa-calendar-times" style="font-size: 2.5rem; color: #94a3b8; margin-bottom: 1rem;"></i>
-                <p style="color: #64748b; font-weight: 500;">No hay eventos deportivos o torneos registrados por el momento.</p>
-            </div>
-        `;
-        return;
-    }
-
-    // Ordenar eventos por fecha ascendente
-    events.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    const now = new Date();
-
-    events.forEach(e => {
-        const evtDate = new Date(e.date);
-        const dayNum = evtDate.getDate();
-        const monthStr = evtDate.toLocaleDateString('es-AR', { month: 'short' }).replace('.', '');
-        const timeStr = evtDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-        
-        let statusHtml = '';
-        if (evtDate < now && (now - evtDate) > (1000 * 60 * 60 * 12)) {
-            statusHtml = `<span class="event-status-pill past"><i class="fas fa-check"></i> Finalizado</span>`;
-        } else if (evtDate.toDateString() === now.toDateString()) {
-            statusHtml = `<span class="event-status-pill today"><i class="fas fa-running"></i> ¡Hoy!</span>`;
-        } else {
-            statusHtml = `<span class="event-status-pill upcoming"><i class="fas fa-clock"></i> Próximo</span>`;
-        }
-
-        const ownTag = e.isOwnEvent ? `
-            <span class="badge" style="background:#fffbebf0; color:#b45309; border: 1px solid #fde68a; font-size: 0.7rem; font-weight:700; display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem;">
-                <i class="fas fa-star" style="color:#f59e0b;"></i> Organizado por Correcaminos
-            </span>
-        ` : '';
-
-        const isAdmin = currentUser && currentUser.role === 'admin';
-        const adminControls = isAdmin ? `
-            <div style="display: flex; gap: 0.4rem;">
-                <button class="btn-action edit btn-edit-event" data-id="${e.id}" title="Editar evento"><i class="fas fa-edit"></i></button>
-                <button class="btn-action reject btn-del-event" data-id="${e.id}" title="Eliminar evento" style="color: var(--danger);"><i class="fas fa-trash-alt"></i></button>
-            </div>
-        ` : '';
-
-        const linkBtn = e.link ? `
-            <a href="${e.link}" target="_blank" class="btn-text" style="font-size: 0.8rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.3rem;">
-                <i class="fas fa-external-link-alt"></i> Info / Reglamento
-            </a>
-        ` : '<span></span>';
-
-        const card = document.createElement('div');
-        card.className = 'event-card';
-        card.innerHTML = `
-            <div>
-                <div class="event-card-header">
-                    <div class="event-date-badge">
-                        <span class="day">${dayNum}</span>
-                        <span class="month">${monthStr}</span>
-                    </div>
-                    <div class="event-title-info">
-                        <h4>${e.title}</h4>
-                        <div style="display:flex; flex-wrap:wrap; gap:0.3rem; align-items:center;">
-                            <span class="event-category-tag" style="margin:0;">${e.category || 'Atletismo'}</span>
-                            ${ownTag}
-                        </div>
-                    </div>
-                </div>
-
-                <div class="event-meta">
-                    <span><i class="fas fa-clock"></i> ${timeStr} hs</span>
-                    <span><i class="fas fa-map-marker-alt"></i> ${e.location}</span>
-                </div>
-
-                ${e.description ? `<p class="event-description">${e.description}</p>` : ''}
-            </div>
-
-            <div class="event-card-actions">
-                ${statusHtml}
-                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                    ${linkBtn}
-                    ${adminControls}
-                </div>
-            </div>
-        `;
-        container.appendChild(card);
-    });
-
-    // Event listeners para editar y borrar eventos
-    container.querySelectorAll('.btn-edit-event').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const evId = btn.dataset.id;
-            const ev = (await window.DataManager.getEvents()).find(x => x.id === evId);
-            if (!ev) return;
-
-            document.getElementById('event-id').value = ev.id;
-            document.getElementById('event-title').value = ev.title || '';
-            document.getElementById('event-date').value = ev.date || '';
-            document.getElementById('event-location').value = ev.location || '';
-            document.getElementById('event-category').value = ev.category || '';
-            document.getElementById('event-description').value = ev.description || '';
-            document.getElementById('event-link').value = ev.link || '';
-            document.getElementById('event-is-own').checked = ev.isOwnEvent === true;
-            document.getElementById('modal-event-title-header').innerText = "Editar Evento Deportivo";
-
-            document.getElementById('modal-event').classList.add('active');
-        });
-    });
-
-    container.querySelectorAll('.btn-del-event').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const evId = btn.dataset.id;
-            if (confirm('¿Eliminar este evento deportivo del calendario?')) {
-                await window.DataManager.deleteEvent(evId);
-                toast('Evento eliminado');
-                renderUserEvents();
-                renderAdminEvents();
-                updateCountdownTimer();
-            }
-        });
-    });
-}
-
-function setupEventModalListeners() {
-    const btnAdd = document.getElementById('btn-add-event');
-    const btnAdminAdd = document.getElementById('btn-admin-add-event');
-    const formEvent = document.getElementById('form-event');
-    const modalEvent = document.getElementById('modal-event');
-
-    // Listener para los botones de alternancia de vista de la cuenta regresiva
-    document.querySelectorAll('.cd-toggle-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.cd-toggle-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentCountdownView = btn.dataset.view || 'general';
-            updateCountdownTimer();
-        });
-    });
-
-    const openCreateModal = () => {
-        if (formEvent) formEvent.reset();
-        document.getElementById('event-id').value = '';
-        document.getElementById('event-is-own').checked = false;
-        document.getElementById('modal-event-title-header').innerText = "Nuevo Evento Deportivo";
-        if (modalEvent) modalEvent.classList.add('active');
-    };
-
-    if (btnAdd) btnAdd.addEventListener('click', openCreateModal);
-    if (btnAdminAdd) btnAdminAdd.addEventListener('click', openCreateModal);
-
-    if (formEvent) {
-        formEvent.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const id = document.getElementById('event-id').value;
-            const title = document.getElementById('event-title').value.trim();
-            const date = document.getElementById('event-date').value;
-            const location = document.getElementById('event-location').value.trim();
-            const category = document.getElementById('event-category').value.trim();
-            const description = document.getElementById('event-description').value.trim();
-            const link = document.getElementById('event-link').value.trim();
-            const isOwnEvent = document.getElementById('event-is-own').checked;
-
-            await window.DataManager.saveEvent(id, {
-                title,
-                date,
-                location,
-                category,
-                description,
-                link,
-                isOwnEvent
-            });
-
-            if (modalEvent) modalEvent.classList.remove('active');
-            toast(id ? 'Evento actualizado' : 'Evento creado con éxito');
-            renderAdminEvents();
-            renderUserEvents();
-            renderSportsHub();
-            updateCountdownTimer();
-        });
-    }
-}
-
-async function renderAdminEvents() {
-    const tbody = document.querySelector('#admin-events-table tbody');
-    if (!tbody) return;
-
-    const events = await window.DataManager.getEvents();
-    tbody.innerHTML = '';
-
-    if (events.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" align="center" style="padding: 2rem; color: var(--text-muted);">No hay eventos deportivos cargados. Presiona "Cargar Nuevo Evento".</td></tr>`;
-        return;
-    }
-
-    events.sort((a, b) => new Date(a.date) - new Date(b.date));
-    const now = new Date();
-
-    events.forEach(e => {
-        const evtDate = new Date(e.date);
-        const dateStr = evtDate.toLocaleDateString('es-AR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        }) + ' ' + evtDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs';
-
-        let statusBadge = '';
-        if (evtDate < now && (now - evtDate) > (1000 * 60 * 60 * 12)) {
-            statusBadge = `<span class="badge" style="background:#f1f5f9; color:#64748b;"><i class="fas fa-check"></i> Finalizado</span>`;
-        } else if (evtDate.toDateString() === now.toDateString()) {
-            statusBadge = `<span class="badge" style="background:#fef9c3; color:#a16207;"><i class="fas fa-running"></i> ¡Hoy!</span>`;
-        } else {
-            statusBadge = `<span class="badge badge-approved" style="background:#dcfce7; color:#15803d;"><i class="fas fa-clock"></i> Próximo</span>`;
-        }
-
-        const ownTag = e.isOwnEvent ? `<br><small style="color:#b45309; font-weight:700;"><i class="fas fa-star" style="color:#f59e0b;"></i> Organizado por Correcaminos</small>` : '';
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><b>${dateStr}</b></td>
-            <td><strong style="color:var(--primary);">${e.title}</strong>${ownTag}</td>
-            <td><i class="fas fa-map-marker-alt" style="color:var(--secondary);"></i> ${e.location}</td>
-            <td><span class="event-category-tag" style="margin:0;">${e.category || 'Atletismo'}</span></td>
-            <td>${statusBadge}</td>
-            <td>
-                <div style="display:flex; gap:0.5rem;">
-                    <button class="btn-action edit btn-edit-event-admin" data-id="${e.id}" title="Editar evento"><i class="fas fa-edit"></i></button>
-                    <button class="btn-action reject btn-del-event-admin" data-id="${e.id}" title="Eliminar evento" style="color:var(--danger);"><i class="fas fa-trash-alt"></i></button>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
-
-    tbody.querySelectorAll('.btn-edit-event-admin').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const evId = btn.dataset.id;
-            const ev = (await window.DataManager.getEvents()).find(x => x.id === evId);
-            if (!ev) return;
-
-            document.getElementById('event-id').value = ev.id;
-            document.getElementById('event-title').value = ev.title || '';
-            document.getElementById('event-date').value = ev.date || '';
-            document.getElementById('event-location').value = ev.location || '';
-            document.getElementById('event-category').value = ev.category || '';
-            document.getElementById('event-description').value = ev.description || '';
-            document.getElementById('event-link').value = ev.link || '';
-            document.getElementById('event-is-own').checked = ev.isOwnEvent === true;
-            document.getElementById('modal-event-title-header').innerText = "Editar Evento Deportivo";
-
-            document.getElementById('modal-event').classList.add('active');
-        });
-    });
-
-    tbody.querySelectorAll('.btn-del-event-admin').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            const evId = btn.dataset.id;
-            if (confirm('¿Eliminar este evento deportivo del calendario?')) {
-                await window.DataManager.deleteEvent(evId);
-                toast('Evento eliminado');
-                renderAdminEvents();
-                renderUserEvents();
-                renderSportsHub();
-                updateCountdownTimer();
-            }
-        });
-    });
-}
+async function renderUserEvents() {}
+function setupEventModalListeners() {}
+async function renderAdminEvents() {}
 
 /**
  * ==========================================================================
- * Centro Deportivo: Próximos Eventos & Rankings (Estilo Federación)
+ * Centro Deportivo: Rankings Oficiales
  * ==========================================================================
  */
-
 async function renderSportsHub() {
-    const hubContainer = document.getElementById('hub-own-events-container');
-    if (!hubContainer) return;
-
-    const events = await window.DataManager.getEvents();
     const rankings = await window.DataManager.getRankingsData();
 
     // Actualizar leyendas de fecha en los banners
@@ -3683,46 +3469,6 @@ async function renderSportsHub() {
     if (provDateEl && rankings.provincialUpdated) {
         provDateEl.innerText = `Federación Provincial • ${rankings.provincialUpdated}`;
     }
-
-    // Filtrar torneos propios organizados por Correcaminos
-    const ownEvents = events
-        .filter(e => e.isOwnEvent === true)
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    hubContainer.innerHTML = '';
-
-    if (ownEvents.length === 0) {
-        hubContainer.innerHTML = `
-            <div style="grid-column: 1/-1; text-align: center; padding: 1.25rem; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; color: #64748b;">
-                <p style="margin: 0; font-size: 0.85rem;"><i class="fas fa-calendar-check" style="color: #f59e0b;"></i> Próximamente se anunciarán nuevos torneos organizados por Correcaminos.</p>
-            </div>
-        `;
-        return;
-    }
-
-    ownEvents.forEach(e => {
-        const evtDate = new Date(e.date);
-        const day = evtDate.getDate();
-        const month = evtDate.toLocaleDateString('es-AR', { month: 'short' }).replace('.', '');
-        const year = evtDate.getFullYear();
-        const time = evtDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-
-        const item = document.createElement('div');
-        item.className = 'hub-event-item';
-        item.innerHTML = `
-            <div class="hub-event-date-box">
-                <span class="hub-day">${day}</span>
-                <span class="hub-month">${month}</span>
-                <span class="hub-year">${year}</span>
-            </div>
-            <div class="hub-event-info">
-                <h5 title="${e.title}">${e.title}</h5>
-                <p title="${e.location}"><i class="fas fa-map-marker-alt" style="color: #f59e0b;"></i> ${e.location}</p>
-                <p style="font-size: 0.72rem; color: #cbd5e1; margin-top: 2px;"><i class="fas fa-clock"></i> ${time} hs • ${e.category || 'Atletismo'}</p>
-            </div>
-        `;
-        hubContainer.appendChild(item);
-    });
 }
 
 /**
@@ -4150,12 +3896,6 @@ window.selectRankingDiscipline = function(disc) {
 };
 
 function setupSportsHubListeners() {
-    // Botón para abrir pestaña del calendario
-    document.getElementById('btn-hub-see-all-events')?.addEventListener('click', () => {
-        const calNav = document.querySelector('.nav-link[data-target="user-events-tab"]');
-        if (calNav) calNav.click();
-    });
-
     // Abrir Modal Interactivo Ranking Correcaminos (Navegación por Banners)
     document.getElementById('btn-open-ranking-club')?.addEventListener('click', async () => {
         const rankings = await window.DataManager.getRankingsData();

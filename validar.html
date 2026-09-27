@@ -359,44 +359,64 @@
             document.getElementById('btn-action-redeem').style.display = 'none';
 
             try {
-                const coupon = await window.DataManager.getCoupon(code);
+                const normalizedCode = code.trim().toUpperCase();
+                const coupon = await window.DataManager.getCoupon(normalizedCode);
                 if (!coupon) {
-                    renderResult(false, "El cupón ingresado no existe o es inválido.");
+                    renderResult(false, "El cupón ingresado no existe en la base de datos o el código es incorrecto.");
                     return;
                 }
 
                 activeCoupon = coupon;
 
-                // Cargar datos complementarios
-                const partner = await window.DataManager.db ? 
-                    (await window.firebase.firestore.getDoc(window.firebase.firestore.doc(db, "partners", coupon.partnerId))).data() : null;
-                const user = await window.DataManager.getUser(coupon.userId);
+                // Datos autónomos del cupón
+                let partnerName = coupon.partnerName || "Comercio Asociado";
+                let discount = coupon.discount || "Beneficio Club";
+                let partnerType = coupon.partnerType || "recurring";
+                let userName = coupon.userName || "Socio de Correcaminos";
 
-                const partnerName = partner ? partner.name : "Comercio Asociado";
-                const discount = partner ? partner.discountDetail : "Beneficio Club";
-                const partnerType = partner ? partner.type : "recurring";
-                const userName = user ? user.name : "Socio de Correcaminos";
+                // Si faltara algún dato complementario (ej: cupones generados con versión antigua), buscarlo con seguridad
+                if (!coupon.partnerName && coupon.partnerId && window.DataManager.db) {
+                    try {
+                        const pDoc = await window.firebase.firestore.getDoc(window.firebase.firestore.doc(db, "partners", coupon.partnerId));
+                        if (pDoc && pDoc.exists) {
+                            const pData = pDoc.data();
+                            partnerName = pData.name || partnerName;
+                            discount = pData.discountDetail || discount;
+                            partnerType = pData.type || partnerType;
+                        }
+                    } catch (e) {
+                        console.warn("Aviso al consultar comercio complementario:", e);
+                    }
+                }
+                if (!coupon.userName && coupon.userId) {
+                    try {
+                        const user = await window.DataManager.getUser(coupon.userId);
+                        if (user) userName = user.name || userName;
+                    } catch (e) {
+                        console.warn("Aviso al consultar socio complementario:", e);
+                    }
+                }
 
-                // Validaciones de caducidad
+                // Validaciones de caducidad y estado
                 if (coupon.status === 'used') {
-                    renderResult(false, `Este cupón ya fue utilizado.`, {
-                        code, partnerName, userName, discount,
+                    renderResult(false, `Este cupón ya fue utilizado y canjeado previamente.`, {
+                        code: normalizedCode, partnerName, userName, discount,
                         date: new Date(coupon.usedAt || coupon.createdAt).toLocaleDateString('es-AR')
                     }, "YA CANJEADO");
                     return;
                 }
 
-                if (coupon.expiresAt < Date.now()) {
-                    renderResult(false, `Este cupón ha vencido (validez de 24 horas superada).`, {
-                        code, partnerName, userName, discount,
+                if (coupon.expiresAt && coupon.expiresAt < Date.now()) {
+                    renderResult(false, `Este cupón ha vencido (superó el límite de validez de 24 horas).`, {
+                        code: normalizedCode, partnerName, userName, discount,
                         date: new Date(coupon.expiresAt).toLocaleDateString('es-AR')
                     }, "VENCIDO");
                     return;
                 }
 
                 // Si todo está bien: Cupón Válido
-                renderResult(true, "Cupón verificado con éxito. Válido para aplicar el descuento.", {
-                    code, partnerName, userName, discount,
+                renderResult(true, "Cupón verificado con éxito en la base de datos de Correcaminos. Válido para aplicar el descuento.", {
+                    code: normalizedCode, partnerName, userName, discount,
                     expires: new Date(coupon.expiresAt).toLocaleString('es-AR')
                 });
 
@@ -406,8 +426,8 @@
                 }
 
             } catch (e) {
-                console.error(e);
-                renderResult(false, "Error de red al conectar con Firestore. Intente nuevamente.");
+                console.error("Error al validar cupón:", e);
+                renderResult(false, "Ocurrió un error al procesar el cupón: " + (e.message || "Error desconocido"));
             }
         }
 

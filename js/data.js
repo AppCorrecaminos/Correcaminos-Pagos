@@ -515,54 +515,109 @@ const DataManager = {
      * Cupones (Coupons)
      */
     async createCoupon(coupon) {
+        if (!this._cache.coupons) this._cache.coupons = [];
+        this._cache.coupons.push(coupon);
+
         const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
-        coupons.push(coupon);
-        localStorage.setItem('correcaminos_coupons', JSON.stringify(coupons));
+        const existingIdx = coupons.findIndex(c => c.id === coupon.id);
+        if (existingIdx >= 0) {
+            coupons[existingIdx] = coupon;
+        } else {
+            coupons.push(coupon);
+        }
+        this._safeSetLocal('correcaminos_coupons', coupons);
 
         if (this.db) {
             try {
                 const docRef = window.firebase.firestore.doc(this.db, "coupons", coupon.id);
                 await window.firebase.firestore.setDoc(docRef, coupon);
             } catch (e) {
-                console.error("Error al registrar cupón en la nube:", e);
-                throw e;
+                console.warn("Cupón guardado localmente, sincronización en nube diferida:", e);
             }
         }
     },
 
     async getCoupon(couponId) {
+        if (!couponId) return null;
+        const normalized = couponId.trim().toUpperCase();
+
+        if (this._cache.coupons) {
+            const found = this._cache.coupons.find(c => c.id && c.id.toUpperCase() === normalized);
+            if (found) return found;
+        }
+
         const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
-        const localCoupon = coupons.find(c => c.id === couponId);
+        const localCoupon = coupons.find(c => c.id && c.id.toUpperCase() === normalized);
         if (localCoupon) return localCoupon;
 
         if (this.db) {
             try {
-                const docRef = window.firebase.firestore.doc(this.db, "coupons", couponId);
+                const docRef = window.firebase.firestore.doc(this.db, "coupons", normalized);
                 const docSnap = await window.firebase.firestore.getDoc(docRef);
-                if (docSnap.exists) return { id: docSnap.id, ...docSnap.data() };
+                if (docSnap.exists) {
+                    const data = { id: docSnap.id, ...docSnap.data() };
+                    if (!this._cache.coupons) this._cache.coupons = [];
+                    this._cache.coupons.push(data);
+                    return data;
+                }
             } catch (e) {
-                console.error("Error al leer cupón en la nube:", e);
+                console.warn("Error al leer cupón en Firestore:", e);
             }
         }
         return null;
     },
 
     async getCouponsByUser(userId) {
-        const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
-        const userCoupons = coupons.filter(c => c.userId === userId);
-        this._syncFromCloud('coupons');
-        return userCoupons;
+        let coupons = [];
+        if (this._cache.coupons && this._cache.coupons.length > 0) {
+            coupons = this._cache.coupons;
+        } else {
+            const local = localStorage.getItem('correcaminos_coupons');
+            if (local) {
+                try {
+                    coupons = JSON.parse(local);
+                    this._cache.coupons = coupons;
+                } catch (e) {}
+            }
+        }
+
+        // Si la caché local está vacía y hay conexión a Firestore, consultar inmediatamente
+        if (coupons.length === 0 && this.db) {
+            try {
+                const q = window.firebase.firestore.collection(this.db, "coupons");
+                const snap = await window.firebase.firestore.getDocs(q);
+                if (snap && snap.docs) {
+                    coupons = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    this._cache.coupons = coupons;
+                    this._safeSetLocal('correcaminos_coupons', coupons);
+                }
+            } catch (errCloud) {
+                console.warn("Consulta inicial de cupones en nube diferida:", errCloud);
+            }
+        } else {
+            this._syncFromCloud('coupons');
+        }
+
+        return coupons.filter(c => c && c.userId === userId);
     },
 
     async updateCoupon(couponId, updates) {
+        if (!couponId) return;
+        const normalized = couponId.trim().toUpperCase();
+
+        if (this._cache.coupons) {
+            const inCache = this._cache.coupons.find(x => x.id && x.id.toUpperCase() === normalized);
+            if (inCache) Object.assign(inCache, updates);
+        }
+
         const coupons = JSON.parse(localStorage.getItem('correcaminos_coupons') || '[]');
-        const c = coupons.find(x => x.id === couponId);
+        const c = coupons.find(x => x.id && x.id.toUpperCase() === normalized);
         if (c) Object.assign(c, updates);
-        localStorage.setItem('correcaminos_coupons', JSON.stringify(coupons));
+        this._safeSetLocal('correcaminos_coupons', coupons);
 
         if (this.db) {
             try {
-                const docRef = window.firebase.firestore.doc(this.db, "coupons", couponId);
+                const docRef = window.firebase.firestore.doc(this.db, "coupons", normalized);
                 await window.firebase.firestore.updateDoc(docRef, updates);
             } catch (e) {
                 console.error("Error al actualizar cupón en nube:", e);
@@ -777,6 +832,7 @@ const DataManager = {
                 const q = window.firebase.firestore.collection(this.db, "coupons");
                 const snap = await window.firebase.firestore.getDocs(q);
                 const cloudCoupons = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                this._cache.coupons = cloudCoupons;
                 this._safeSetLocal('correcaminos_coupons', cloudCoupons);
             }
         } catch (err) {

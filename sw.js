@@ -1,4 +1,4 @@
-const CACHE_NAME = 'correcaminos-v5.1';
+const CACHE_NAME = 'correcaminos-v5.4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
